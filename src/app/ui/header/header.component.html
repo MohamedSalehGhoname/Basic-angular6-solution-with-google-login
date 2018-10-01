@@ -1,0 +1,65 @@
+<nav class="bs-dark navbar bg-primary navbar navbar-expand-lg mb-5" [class.fixed-top]="uiService.fixedTopNavBar"
+  [class.navbar-dark]="!uiService.lightNavBar" [class.bg-dark]="!uiService.lightNavBar" [class.navbar-light]="uiService.lightNavBar"
+  [class.bg-light]="uiService.lightNavBar">
+  <a class="navbar-brand" routerLink="/">Case managment</a>
+  <button class="navbar-toggler hidden-sm-up" type="button" (click)="isNavbarCollapsed = !isNavbarCollapsed"
+    data-target="#navbarsDefault" aria-controls="navbarsDefault" aria-expanded="false" aria-label="Toggle navigation">
+    <span class="navbar-toggler-icon"></span>
+  </button>
+  <div [ngbCollapse]="isNavbarCollapsed" class="collapse navbar-collapse" id="navbarsDefault">
+
+    <ul class="nav navbar-nav mr-auto">
+      <li class="active"><a class="nav-item nav-link" routerLink="/">Home</a></li>
+      <li><a class="nav-item nav-link" routerLink="/user">Profile</a></li>
+
+      <li ngbDropdown class="nav-item dropdown">
+        <a ngbDropdownToggle class="nav-link dropdown-toggle" id="navbarDropdown" role="button" data-toggle="dropdown"
+          aria-haspopup="true" aria-expanded="false">
+          Tickets
+        </a>
+        <div ngbDropdownMenu class="dropdown-menu" aria-labelledby="navbarDropdown">
+          <a class="dropdown-item" href="#">My Tickets</a>
+          <a class="dropdown-item" href="#">New Ticket</a>
+        </div>
+      </li>
+    </ul>
+
+
+    <ul class="nav navbar-nav ml-auto navbar-right">
+      <li class="active">
+        <a class="nav-item nav-link" href="https://github.com/mohamedsalehghoname" target="_blank">
+          <i class="fa fa-github"></i>
+        </a>
+      </li>
+      <li>
+        <a class="nav-item nav-link" href="https://www.linkedin.com/in/mohamedsalehghoname" target="_blank">
+          <i class="fa fa-linkedin"></i>
+        </a>
+      </li>
+      <li class="nav-item dropdown">
+
+
+      </li>
+    </ul>
+
+    <ul class="nav navbar-nav navbar-right">
+      <li ngbDropdown class="dropdown ">
+        <div ngbDropdownToggle href="#" class="dropdown-toggle navbar-img" data-toggle="dropdown" role="button"
+          aria-haspopup="true" aria-expanded="false">
+
+          <app-avatar></app-avatar>
+        </div>
+        <div ngbDropdownMenu class="dropdown-menu right-nav-dropdown" aria-labelledby="navbarDropdown">
+          <div *ngIf="authService.user$ | async as user; else annonymousUser">
+            <a class="dropdown-item" routerLink="/user"><b>{{user.displayName}}</b></a>
+            <div class="dropdown-divider"></div>
+            <a class="dropdown-item" routerLink="/" (click)="authService.signOut()">logout</a>
+          </div>
+          <ng-template #annonymousUser>
+            <a class="dropdown-item" routerLink="/login"><b>Login</b></a>
+          </ng-template>
+        </div>
+      </li>
+    </ul>
+  </div>
+</nav>

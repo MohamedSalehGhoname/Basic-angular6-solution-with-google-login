@@ -1,0 +1,35 @@
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card">
+      <header class="card-header">
+        <h4 class="card-title mt-2">Login</h4>
+      </header>
+      <article class="card-body">
+        <form>
+          <div class="form-row">
+            <div class="col form-group">
+              <label>Username</label>
+              <input type="text" class="form-control" placeholder="">
+            </div> <!-- form-group end.// -->
+
+          </div> <!-- form-row end.// -->
+          <div class="form-group">
+            <label>password</label>
+            <input type="password" class="form-control" placeholder="">
+          </div> <!-- form-group end.// -->
+          <div class="form-group">
+            <button type="submit" class="btn btn-primary btn-block"> Login </button>
+          </div> <!-- form-group// -->
+          <div class="form-group">
+            <a class="btn btn-block btn-google-plus" (click)="authService.googleLogin()" style="color:white;background-color:#dd4b39">
+              <i class="fa fa-google-plus"></i> Login with Google
+            </a>
+          </div> <!-- form-group// -->
+
+        </form>
+      </article> <!-- card-body end .// -->
+      <div class="border-top card-body text-center">Don't have an account? <a href="">Sign up</a></div>
+    </div> <!-- card.// -->
+  </div> <!-- col.//-->
+
+</div>

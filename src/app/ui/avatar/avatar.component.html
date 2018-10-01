@@ -1,0 +1,9 @@
+<div class="avatar-holder">
+  <div *ngIf="authService.user$ | async as user; else annonymousUser">
+    <img [src]="user.photoURL" class="avatar rounded-circle">
+  </div>
+
+  <ng-template #annonymousUser>
+    <img src="../../../assets/annonymousUser.png" class="avatar rounded-circle">
+  </ng-template>
+</div>

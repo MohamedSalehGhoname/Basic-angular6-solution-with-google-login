@@ -1,0 +1,35 @@
+.navbar-right .dropdown-toggle::after {
+    display: none;
+}
+
+.navbar-right .dropdown-menu {
+    
+    position: absolute;
+    width: 250px; 
+    top: 35px;
+    left: -192px !important;
+}
+
+.navbar-right .dropdown-item {
+    word-wrap: none;
+    overflow: hidden !important;
+    text-overflow: ellipsis;
+    width: 100%;
+}
+
+.dropdown-toggle {
+    cursor: pointer;
+}
+
+/* @media (min-width: 768px) {
+     
+     .dropdown:hover .dropdown-menu {
+        display: block;
+        
+        
+       
+      }
+
+     
+    
+  } */
