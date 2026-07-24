@@ -1,0 +1,15 @@
+<header>
+  <a routerLink="/" class="brand">Clipboard Sync</a>
+
+  @if (auth.user(); as user) {
+    <div class="user">
+      @if (user.photoURL) {
+        <img [src]="user.photoURL" [alt]="user.displayName ?? 'User avatar'" referrerpolicy="no-referrer" />
+      } @else {
+        <span class="avatar-fallback">{{ (user.displayName ?? user.email ?? '?').charAt(0).toUpperCase() }}</span>
+      }
+      <span class="name">{{ user.displayName ?? user.email }}</span>
+      <button type="button" (click)="auth.logout()">Sign out</button>
+    </div>
+  }
+</header>

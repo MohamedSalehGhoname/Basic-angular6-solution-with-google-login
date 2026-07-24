@@ -1,0 +1,19 @@
+<h1>Clipboard</h1>
+
+@if (items().length === 0) {
+  <div class="empty-state">
+    <p>No clipboard items yet.</p>
+    <p class="hint">
+      Items copied on your enrolled devices will appear here once sync is set up.
+    </p>
+  </div>
+} @else {
+  <ul class="items">
+    @for (item of items(); track item.id) {
+      <li>
+        <span class="preview">{{ item.preview }}</span>
+        <span class="meta">{{ item.device }} · {{ item.copiedAt | date: 'short' }}</span>
+      </li>
+    }
+  </ul>
+}

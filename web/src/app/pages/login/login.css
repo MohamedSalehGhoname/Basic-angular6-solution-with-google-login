@@ -1,0 +1,45 @@
+:host {
+  display: grid;
+  place-items: center;
+  min-height: 70vh;
+}
+
+.login-card {
+  max-width: 22rem;
+  padding: 2.5rem 2rem;
+  text-align: center;
+  border: 1px solid #e0e0e0;
+  border-radius: 0.75rem;
+}
+
+.login-card h1 {
+  margin: 0 0 0.5rem;
+  font-size: 1.5rem;
+}
+
+.login-card p {
+  margin: 0 0 1.5rem;
+  color: #555;
+}
+
+.google-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 1.2rem;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 0.5rem;
+  background: #fff;
+  cursor: pointer;
+}
+
+.google-btn:hover {
+  background: #f6f6f6;
+}
+
+.error {
+  margin-top: 1rem;
+  color: #b3261e;
+  font-size: 0.875rem;
+}
