@@ -155,6 +155,63 @@ describe('ClipboardStore', () => {
     await waitFor(() => syncApi.items.size === 0);
   });
 
+  it('replays offline deletions on the next online load instead of resurrecting items', async () => {
+    const doomed = await store.add('delete me offline');
+    await store.add('keep me');
+    expect(syncApi.items.size).toBe(2);
+
+    syncApi.offline = true;
+    store.remove(doomed!.id);
+    await waitFor(() => store.online() === false);
+    expect(syncApi.items.has(doomed!.id)).toBe(true);
+
+    syncApi.offline = false;
+    TestBed.resetTestingModule();
+    configure();
+    await vault.unlock('a long passphrase');
+    await store.load();
+
+    expect(store.items().map((item) => item.text)).toEqual(['keep me']);
+    expect(syncApi.items.has(doomed!.id)).toBe(false);
+    expect(store.online()).toBe(true);
+    // Tombstone is consumed once replayed.
+    expect(JSON.parse(localStorage.getItem('clipsync.items.test-uid')!).deleted).toEqual([]);
+  });
+
+  it('does not resurrect items cleared while offline', async () => {
+    await store.add('one');
+    await store.add('two');
+    expect(syncApi.items.size).toBe(2);
+
+    syncApi.offline = true;
+    store.clear();
+    await waitFor(() => store.online() === false);
+    expect(syncApi.items.size).toBe(2);
+
+    syncApi.offline = false;
+    TestBed.resetTestingModule();
+    configure();
+    await vault.unlock('a long passphrase');
+    await store.load();
+
+    expect(store.items()).toEqual([]);
+    expect(syncApi.items.size).toBe(0);
+  });
+
+  it('ignores a live item-added event for a tombstoned id', async () => {
+    const doomed = await store.add('delete me offline');
+    const blob = syncApi.items.get(doomed!.id)!.blob;
+
+    syncApi.offline = true;
+    store.remove(doomed!.id);
+    await waitFor(() => store.online() === false);
+
+    await store.load();
+    syncApi.emit({ type: 'item-added', item: { id: doomed!.id, blob, createdAt: 1 } });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(store.items().some((item) => item.id === doomed!.id)).toBe(false);
+  });
+
   it('skips blobs it cannot decrypt instead of failing the load', async () => {
     await store.add('good item');
     const key = 'clipsync.items.test-uid';

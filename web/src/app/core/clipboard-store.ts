@@ -23,6 +23,8 @@ interface StoredItem {
 interface StoredList {
   version: 1;
   items: StoredItem[];
+  /** Tombstones: ids deleted while offline, replayed on the next online load. */
+  deleted: string[];
 }
 
 const MAX_ITEMS = 200;
@@ -73,9 +75,24 @@ export class ClipboardStore {
       return;
     }
 
-    let storedItems = this.readStored(uid).items;
+    const stored = this.readStored(uid);
+    let storedItems = stored.items;
+    let tombstones = [...stored.deleted];
     try {
-      const remote = await this.syncApi.listItems();
+      const replayed = new Set<string>();
+      for (const id of tombstones) {
+        try {
+          await this.syncApi.deleteItem(id);
+          replayed.add(id);
+        } catch {
+          // Replayed again on a later load.
+        }
+      }
+      tombstones = tombstones.filter((id) => !replayed.has(id));
+
+      const remote = (await this.syncApi.listItems()).filter(
+        (item) => !tombstones.includes(item.id),
+      );
       const remoteIds = new Set(remote.map((item) => item.id));
       const localOnly = storedItems.filter((item) => !remoteIds.has(item.id));
       for (const item of localOnly) {
@@ -115,6 +132,7 @@ export class ClipboardStore {
     this.writeStored(uid, {
       version: 1,
       items: capped.map((entry) => ({ id: entry.id, blob: blobsById.get(entry.id)! })),
+      deleted: tombstones,
     });
     this._items.set(capped);
     this._skipped.set(skipped);
@@ -153,14 +171,27 @@ export class ClipboardStore {
 
   remove(id: string): void {
     const uid = this.requireUid();
-    this.removeLocally(uid, id);
-    this.syncApi.deleteItem(id).catch(() => this._online.set(false));
+    this.removeLocally(uid, id, true);
+    this.syncApi.deleteItem(id).then(
+      () => {
+        this.dropTombstones(uid, [id]);
+        this._online.set(true);
+      },
+      () => this._online.set(false),
+    );
   }
 
   clear(): void {
     const uid = this.requireUid();
-    this.clearLocally(uid);
-    this.syncApi.clearItems().catch(() => this._online.set(false));
+    const ids = this.readStored(uid).items.map((item) => item.id);
+    this.clearLocally(uid, ids);
+    this.syncApi.clearItems().then(
+      () => {
+        this.dropTombstones(uid, ids);
+        this._online.set(true);
+      },
+      () => this._online.set(false),
+    );
   }
 
   private connectSocket(): void {
@@ -180,7 +211,10 @@ export class ClipboardStore {
     }
     switch (event.type) {
       case 'item-added': {
-        if (this._items().some((item) => item.id === event.item.id)) {
+        if (
+          this._items().some((item) => item.id === event.item.id) ||
+          this.readStored(uid).deleted.includes(event.item.id)
+        ) {
           return;
         }
         try {
@@ -202,7 +236,8 @@ export class ClipboardStore {
         break;
       }
       case 'item-removed':
-        this.removeLocally(uid, event.id);
+        // Already deleted on the server; no tombstone needed.
+        this.removeLocally(uid, event.id, false);
         break;
       case 'items-cleared':
         this.clearLocally(uid);
@@ -214,17 +249,31 @@ export class ClipboardStore {
     }
   }
 
-  private removeLocally(uid: string, id: string): void {
+  private removeLocally(uid: string, id: string, tombstone: boolean): void {
     const stored = this.readStored(uid);
     stored.items = stored.items.filter((item) => item.id !== id);
+    if (tombstone && !stored.deleted.includes(id)) {
+      stored.deleted.push(id);
+    }
     this.writeStored(uid, stored);
     this._items.update((items) => items.filter((item) => item.id !== id));
   }
 
-  private clearLocally(uid: string): void {
-    this.writeStored(uid, { version: 1, items: [] });
+  private clearLocally(uid: string, tombstoneIds: string[] = []): void {
+    const stored = this.readStored(uid);
+    this.writeStored(uid, {
+      version: 1,
+      items: [],
+      deleted: [...new Set([...stored.deleted, ...tombstoneIds])],
+    });
     this._items.set([]);
     this._skipped.set(0);
+  }
+
+  private dropTombstones(uid: string, ids: string[]): void {
+    const stored = this.readStored(uid);
+    stored.deleted = stored.deleted.filter((id) => !ids.includes(id));
+    this.writeStored(uid, stored);
   }
 
   private requireUid(): string {
@@ -243,14 +292,19 @@ export class ClipboardStore {
     try {
       const raw = localStorage.getItem(this.storageKey(uid));
       if (!raw) {
-        return { version: 1, items: [] };
+        return { version: 1, items: [], deleted: [] };
       }
-      const parsed = JSON.parse(raw) as StoredList;
-      return parsed.version === 1 && Array.isArray(parsed.items)
-        ? parsed
-        : { version: 1, items: [] };
+      const parsed = JSON.parse(raw) as Partial<StoredList>;
+      if (parsed.version !== 1 || !Array.isArray(parsed.items)) {
+        return { version: 1, items: [], deleted: [] };
+      }
+      return {
+        version: 1,
+        items: parsed.items,
+        deleted: Array.isArray(parsed.deleted) ? parsed.deleted : [],
+      };
     } catch {
-      return { version: 1, items: [] };
+      return { version: 1, items: [], deleted: [] };
     }
   }
 
