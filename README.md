@@ -35,8 +35,11 @@ npm run build    # production build
 npm test         # unit tests
 ```
 
-Signed-out visitors are redirected to `/login`; after Google sign-in you land on
-the (currently empty) clipboard page.
+Signed-out visitors are redirected to `/login`. After Google sign-in you set up
+(first visit) or enter your vault passphrase on `/unlock` — it derives the
+encryption keys client-side and is unrecoverable by design — and then land on
+the (currently empty) clipboard page. The vault relocks on reload, on the
+header's Lock button, and on sign-out.
 
 ## Architecture direction
 

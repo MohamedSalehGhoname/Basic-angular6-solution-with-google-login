@@ -1,0 +1,53 @@
+<form class="unlock-card" (ngSubmit)="submit()">
+  @if (creating()) {
+    <h1>Create your vault</h1>
+    <p>
+      Choose a passphrase to encrypt your clipboard. It never leaves this
+      device and <strong>cannot be recovered</strong> — if you forget it,
+      the vault's contents are lost.
+    </p>
+  } @else {
+    <h1>Unlock your vault</h1>
+    <p>Enter your passphrase to decrypt your clipboard on this device.</p>
+  }
+
+  <label>
+    Passphrase
+    <input
+      type="password"
+      name="passphrase"
+      [(ngModel)]="passphrase"
+      autocomplete="{{ creating() ? 'new-password' : 'current-password' }}"
+      [disabled]="busy()"
+      autofocus
+    />
+  </label>
+
+  @if (creating()) {
+    <label>
+      Confirm passphrase
+      <input
+        type="password"
+        name="confirmation"
+        [(ngModel)]="confirmation"
+        autocomplete="new-password"
+        [disabled]="busy()"
+      />
+    </label>
+    <p class="hint">At least {{ minLength }} characters. A short sentence works well.</p>
+  }
+
+  <button type="submit" [disabled]="busy()">
+    @if (busy()) {
+      Deriving keys…
+    } @else if (creating()) {
+      Create vault
+    } @else {
+      Unlock
+    }
+  </button>
+
+  @if (error(); as message) {
+    <p class="error" role="alert">{{ message }}</p>
+  }
+</form>

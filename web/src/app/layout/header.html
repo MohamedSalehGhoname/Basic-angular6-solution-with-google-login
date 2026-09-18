@@ -9,7 +9,10 @@
         <span class="avatar-fallback">{{ (user.displayName ?? user.email ?? '?').charAt(0).toUpperCase() }}</span>
       }
       <span class="name">{{ user.displayName ?? user.email }}</span>
-      <button type="button" (click)="auth.logout()">Sign out</button>
+      @if (vault.status() === 'unlocked') {
+        <button type="button" (click)="lockVault()">Lock</button>
+      }
+      <button type="button" (click)="signOut()">Sign out</button>
     </div>
   }
 </header>
