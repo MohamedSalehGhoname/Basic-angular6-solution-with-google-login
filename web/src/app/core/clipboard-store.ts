@@ -8,7 +8,20 @@ export interface ClipboardEntry {
   text: string;
   device: string;
   copiedAt: number;
+  /** Epoch ms after which the item self-destructs; null/absent = keep forever. */
+  expiresAt?: number | null;
 }
+
+/** Selectable defaults for how long new items live. */
+export const TTL_OPTIONS = [
+  { label: '1 hour', ms: 60 * 60 * 1000 },
+  { label: '1 day', ms: 24 * 60 * 60 * 1000 },
+  { label: '1 week', ms: 7 * 24 * 60 * 60 * 1000 },
+  { label: 'Forever', ms: null },
+] as const;
+
+const DEFAULT_TTL_MS: number | null = 24 * 60 * 60 * 1000;
+const SWEEP_INTERVAL_MS = 30_000;
 
 /**
  * Mirror shape, also what the server stores: everything but the item id is
@@ -53,6 +66,10 @@ export class ClipboardStore {
   private readonly _online = signal(false);
   readonly online = this._online.asReadonly();
 
+  /** TTL applied to newly added items; per device, not synced. */
+  private readonly _ttlMs = signal<number | null>(DEFAULT_TTL_MS);
+  readonly ttlMs = this._ttlMs.asReadonly();
+
   private loadedUid: string | null = null;
   private disconnect: (() => void) | null = null;
 
@@ -67,6 +84,33 @@ export class ClipboardStore {
         this._online.set(false);
       }
     });
+    setInterval(() => {
+      if (this.vault.status() === 'unlocked' && this.loadedUid) {
+        this.sweepExpired();
+      }
+    }, SWEEP_INTERVAL_MS);
+  }
+
+  setTtl(ms: number | null): void {
+    this._ttlMs.set(ms);
+    const uid = this.auth.user()?.uid;
+    if (uid) {
+      try {
+        localStorage.setItem(this.ttlKey(uid), JSON.stringify(ms));
+      } catch {
+        // Preference only; losing it is harmless.
+      }
+    }
+  }
+
+  /** Deletes every expired item locally and on the server. */
+  sweepExpired(): void {
+    const now = Date.now();
+    for (const item of this._items()) {
+      if (item.expiresAt != null && item.expiresAt <= now) {
+        this.remove(item.id);
+      }
+    }
   }
 
   async load(): Promise<void> {
@@ -74,6 +118,7 @@ export class ClipboardStore {
     if (this.loadedUid === uid) {
       return;
     }
+    this._ttlMs.set(this.readTtl(uid));
 
     const stored = this.readStored(uid);
     let storedItems = stored.items;
@@ -129,14 +174,29 @@ export class ClipboardStore {
     entries.sort((a, b) => b.copiedAt - a.copiedAt);
     const capped = entries.slice(0, MAX_ITEMS);
 
+    // Expired items are dropped here and deleted on the server (tombstoned
+    // until that delete goes through).
+    const now = Date.now();
+    const isExpired = (entry: ClipboardEntry) =>
+      entry.expiresAt != null && entry.expiresAt <= now;
+    const live = capped.filter((entry) => !isExpired(entry));
+    const expired = capped.filter(isExpired);
+    tombstones = [...new Set([...tombstones, ...expired.map((entry) => entry.id)])];
+
     this.writeStored(uid, {
       version: 1,
-      items: capped.map((entry) => ({ id: entry.id, blob: blobsById.get(entry.id)! })),
+      items: live.map((entry) => ({ id: entry.id, blob: blobsById.get(entry.id)! })),
       deleted: tombstones,
     });
-    this._items.set(capped);
+    this._items.set(live);
     this._skipped.set(skipped);
     this.loadedUid = uid;
+    for (const entry of expired) {
+      this.syncApi.deleteItem(entry.id).then(
+        () => this.dropTombstones(uid, [entry.id]),
+        () => {},
+      );
+    }
     this.connectSocket();
   }
 
@@ -145,14 +205,21 @@ export class ClipboardStore {
       return null;
     }
     const uid = this.requireUid();
+    const ttl = this._ttlMs();
     const entry: ClipboardEntry = {
       id: crypto.randomUUID(),
       text,
       device: 'Web',
       copiedAt: Date.now(),
+      expiresAt: ttl === null ? null : Date.now() + ttl,
     };
     const blob = await this.vault.encryptItem(
-      JSON.stringify({ text: entry.text, device: entry.device, copiedAt: entry.copiedAt }),
+      JSON.stringify({
+        text: entry.text,
+        device: entry.device,
+        copiedAt: entry.copiedAt,
+        expiresAt: entry.expiresAt,
+      }),
     );
 
     const stored = this.readStored(uid);
@@ -223,6 +290,9 @@ export class ClipboardStore {
             'id'
           >;
           const entry: ClipboardEntry = { id: event.item.id, ...payload };
+          if (entry.expiresAt != null && entry.expiresAt <= Date.now()) {
+            return;
+          }
           const stored = this.readStored(uid);
           stored.items = [
             { id: entry.id, blob: event.item.blob },
@@ -286,6 +356,23 @@ export class ClipboardStore {
 
   private storageKey(uid: string): string {
     return `clipsync.items.${uid}`;
+  }
+
+  private ttlKey(uid: string): string {
+    return `clipsync.ttl.${uid}`;
+  }
+
+  private readTtl(uid: string): number | null {
+    try {
+      const raw = localStorage.getItem(this.ttlKey(uid));
+      if (raw === null) {
+        return DEFAULT_TTL_MS;
+      }
+      const parsed = JSON.parse(raw) as unknown;
+      return typeof parsed === 'number' && parsed > 0 ? parsed : null;
+    } catch {
+      return DEFAULT_TTL_MS;
+    }
   }
 
   private readStored(uid: string): StoredList {

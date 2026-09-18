@@ -1,7 +1,7 @@
 import { DatePipe } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ClipboardStore, type ClipboardEntry } from '../../core/clipboard-store';
+import { ClipboardStore, TTL_OPTIONS, type ClipboardEntry } from '../../core/clipboard-store';
 
 @Component({
   selector: 'app-clipboard',
@@ -12,6 +12,7 @@ import { ClipboardStore, type ClipboardEntry } from '../../core/clipboard-store'
 export class Clipboard {
   protected readonly store = inject(ClipboardStore);
 
+  protected readonly ttlOptions = TTL_OPTIONS;
   protected draft = '';
   protected readonly loading = signal(true);
   protected readonly error = signal<string | null>(null);
@@ -69,6 +70,10 @@ export class Clipboard {
     } catch {
       this.error.set('Could not write to your clipboard.');
     }
+  }
+
+  protected onTtlChange(value: string): void {
+    this.store.setTtl(value === 'null' ? null : Number(value));
   }
 
   protected remove(id: string): void {

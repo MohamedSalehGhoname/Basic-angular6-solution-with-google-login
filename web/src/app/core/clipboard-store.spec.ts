@@ -228,6 +228,53 @@ describe('ClipboardStore', () => {
     expect(store.skipped()).toBe(1);
   });
 
+  it('stamps new items with the configured TTL', async () => {
+    store.setTtl(60 * 60 * 1000);
+    const before = Date.now();
+    const entry = await store.add('short-lived');
+    expect(entry!.expiresAt).toBeGreaterThanOrEqual(before + 60 * 60 * 1000);
+
+    store.setTtl(null);
+    const forever = await store.add('kept forever');
+    expect(forever!.expiresAt).toBeNull();
+  });
+
+  it('drops expired items on load and deletes them from the server', async () => {
+    const expiredBlob = await vault.encryptItem(
+      JSON.stringify({ text: 'stale', device: 'Phone', copiedAt: 1, expiresAt: Date.now() - 1000 }),
+    );
+    await syncApi.putItem('stale-1', expiredBlob);
+    await store.add('still fresh');
+
+    TestBed.resetTestingModule();
+    configure();
+    await vault.unlock('a long passphrase');
+    await store.load();
+
+    expect(store.items().map((item) => item.text)).toEqual(['still fresh']);
+    await waitFor(() => !syncApi.items.has('stale-1'));
+  });
+
+  it('sweeps items that expire while the app is open', async () => {
+    store.setTtl(1);
+    await store.add('about to expire');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    store.sweepExpired();
+    expect(store.items()).toEqual([]);
+    await waitFor(() => syncApi.items.size === 0);
+  });
+
+  it('ignores live events for already-expired items', async () => {
+    await store.load();
+    const blob = await vault.encryptItem(
+      JSON.stringify({ text: 'dead on arrival', device: 'Phone', copiedAt: 1, expiresAt: Date.now() - 1 }),
+    );
+    syncApi.emit({ type: 'item-added', item: { id: 'dead-1', blob, createdAt: 1 } });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(store.items()).toEqual([]);
+  });
+
   it('drops decrypted items from memory and disconnects when the vault locks', async () => {
     await store.load();
     await store.add('sensitive');

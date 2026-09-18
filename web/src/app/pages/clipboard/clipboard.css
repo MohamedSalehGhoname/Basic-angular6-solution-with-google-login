@@ -25,8 +25,27 @@
 
 .composer-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.ttl {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-right: auto;
+  color: #555;
+  font-size: 0.85rem;
+}
+
+.ttl select {
+  padding: 0.35rem 0.5rem;
+  font: inherit;
+  border: 1px solid #ccc;
+  border-radius: 0.4rem;
+  background: #fff;
 }
 
 button {

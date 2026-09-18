@@ -13,6 +13,16 @@
     placeholder="Type or paste something to keep it in your encrypted clipboard…"
   ></textarea>
   <div class="composer-actions">
+    <label class="ttl">
+      New items expire after
+      <select (change)="onTtlChange($any($event.target).value)">
+        @for (option of ttlOptions; track option.label) {
+          <option [value]="option.ms" [selected]="store.ttlMs() === option.ms">
+            {{ option.label }}
+          </option>
+        }
+      </select>
+    </label>
     <button type="button" class="ghost" (click)="pasteFromClipboard()">
       Paste from clipboard
     </button>
@@ -50,7 +60,12 @@
       <li>
         <div class="content">
           <span class="preview">{{ item.text }}</span>
-          <span class="meta">{{ item.device }} · {{ item.copiedAt | date: 'short' }}</span>
+          <span class="meta">
+            {{ item.device }} · {{ item.copiedAt | date: 'short' }}
+            @if (item.expiresAt != null) {
+              · expires {{ item.expiresAt | date: 'short' }}
+            }
+          </span>
         </div>
         <div class="actions">
           <button type="button" (click)="copy(item)">
