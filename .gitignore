@@ -6,3 +6,7 @@ npm-debug.log*
 .DS_Store
 .vscode/
 .idea/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm

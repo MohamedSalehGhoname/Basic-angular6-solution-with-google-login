@@ -9,11 +9,10 @@ sign-in; the sync server, E2EE layer, and mobile clients come later.
 
 ## Repository layout
 
-| Path   | Contents                                              |
-| ------ | ----------------------------------------------------- |
-| `web/` | Angular web client (latest Angular, standalone, signals) |
-
-A `server/` (zero-knowledge sync backend) is planned.
+| Path      | Contents                                                 |
+| --------- | -------------------------------------------------------- |
+| `web/`    | Angular web client (latest Angular, standalone, signals) |
+| `server/` | Zero-knowledge sync server (Fastify + SQLite + WebSocket) |
 
 ## Web client setup
 
@@ -40,6 +39,34 @@ Signed-out visitors are redirected to `/login`. After Google sign-in you set up
 encryption keys client-side and is unrecoverable by design — and then land on
 the (currently empty) clipboard page. The vault relocks on reload, on the
 header's Lock button, and on sign-out.
+
+## Sync server
+
+The server stores and relays ciphertext only: `xcv1:` blobs, the wrapped vault
+key, and KDF salt/params. It authenticates users by verifying Firebase ID
+tokens against Google's public keys (no Firebase SDK or service account
+needed) and can never derive encryption keys.
+
+```bash
+cd server
+npm install
+FIREBASE_PROJECT_ID=your-project npm run dev   # or INSECURE_DEV_AUTH=1 for local dev
+npm test
+```
+
+Environment: `PORT` (default 8787), `HOST`, `DATABASE_PATH` (SQLite file,
+default `clipsync.db`), `FIREBASE_PROJECT_ID`, `INSECURE_DEV_AUTH=1` (dev
+only: bearer token is trusted as the uid).
+
+API (bearer-token auth): `GET/PUT /api/vault` for the vault record,
+`GET /api/items`, `PUT/DELETE /api/items/:id`, `DELETE /api/items`, and
+`GET /api/sync?token=…&clientId=…` — a WebSocket that pushes
+`vault-updated` / `item-added` / `item-removed` / `items-cleared` events to
+the user's other devices, skipping the originating `clientId`. History is
+capped at 200 items per user.
+
+The web client still stores items in localStorage; wiring it to this server
+is the next step.
 
 ## Architecture direction
 
