@@ -46,7 +46,8 @@ the (currently empty) clipboard page.
   bypass capture and auto-clear.
 - **Zero-knowledge crypto**: Argon2id passphrase stretching → master key →
   wrapped random vault key; per-item XChaCha20-Poly1305 blobs (libsodium).
-  See the stub seam in `web/src/app/core/crypto.service.ts`.
+  Implemented in `web/src/app/core/crypto.service.ts`; device enrollment and
+  the sync layer that uses it come next.
 - **Auth ≠ encryption**: Google login authenticates the account; it can never
   derive the decryption keys.
 - **Capture model**: desktop clients/extension auto-capture; mobile apps are
