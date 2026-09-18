@@ -1,18 +1,57 @@
-<h1>Clipboard</h1>
+<div class="page-head">
+  <h1>Clipboard</h1>
+  @if (store.items().length > 0) {
+    <button type="button" class="ghost" (click)="clear()">Clear all</button>
+  }
+</div>
 
-@if (items().length === 0) {
+<form class="composer" (ngSubmit)="add()">
+  <textarea
+    name="draft"
+    [(ngModel)]="draft"
+    rows="3"
+    placeholder="Type or paste something to keep it in your encrypted clipboard…"
+  ></textarea>
+  <div class="composer-actions">
+    <button type="button" class="ghost" (click)="pasteFromClipboard()">
+      Paste from clipboard
+    </button>
+    <button type="submit" [disabled]="!draft.trim()">Add</button>
+  </div>
+</form>
+
+@if (error(); as message) {
+  <p class="error" role="alert">{{ message }}</p>
+}
+
+@if (loading()) {
+  <p class="muted">Decrypting your clipboard…</p>
+} @else if (store.items().length === 0) {
   <div class="empty-state">
     <p>No clipboard items yet.</p>
     <p class="hint">
-      Items copied on your enrolled devices will appear here once sync is set up.
+      Everything you add is encrypted on this device before it is stored.
     </p>
   </div>
 } @else {
+  @if (store.skipped() > 0) {
+    <p class="muted">
+      {{ store.skipped() }} item(s) could not be decrypted and were skipped.
+    </p>
+  }
   <ul class="items">
-    @for (item of items(); track item.id) {
+    @for (item of store.items(); track item.id) {
       <li>
-        <span class="preview">{{ item.preview }}</span>
-        <span class="meta">{{ item.device }} · {{ item.copiedAt | date: 'short' }}</span>
+        <div class="content">
+          <span class="preview">{{ item.text }}</span>
+          <span class="meta">{{ item.device }} · {{ item.copiedAt | date: 'short' }}</span>
+        </div>
+        <div class="actions">
+          <button type="button" (click)="copy(item)">
+            {{ copiedId() === item.id ? 'Copied!' : 'Copy' }}
+          </button>
+          <button type="button" class="ghost" (click)="remove(item.id)">Delete</button>
+        </div>
       </li>
     }
   </ul>
