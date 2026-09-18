@@ -1,5 +1,7 @@
 <form class="unlock-card" (ngSubmit)="submit()">
-  @if (creating()) {
+  @if (!ready()) {
+    <p class="hint">Checking for an existing vault…</p>
+  } @else if (creating()) {
     <h1>Create your vault</h1>
     <p>
       Choose a passphrase to encrypt your clipboard. It never leaves this
@@ -11,43 +13,45 @@
     <p>Enter your passphrase to decrypt your clipboard on this device.</p>
   }
 
-  <label>
-    Passphrase
-    <input
-      type="password"
-      name="passphrase"
-      [(ngModel)]="passphrase"
-      autocomplete="{{ creating() ? 'new-password' : 'current-password' }}"
-      [disabled]="busy()"
-      autofocus
-    />
-  </label>
-
-  @if (creating()) {
+  @if (ready()) {
     <label>
-      Confirm passphrase
+      Passphrase
       <input
         type="password"
-        name="confirmation"
-        [(ngModel)]="confirmation"
-        autocomplete="new-password"
+        name="passphrase"
+        [(ngModel)]="passphrase"
+        autocomplete="{{ creating() ? 'new-password' : 'current-password' }}"
         [disabled]="busy()"
+        autofocus
       />
     </label>
-    <p class="hint">At least {{ minLength }} characters. A short sentence works well.</p>
-  }
 
-  <button type="submit" [disabled]="busy()">
-    @if (busy()) {
-      Deriving keys…
-    } @else if (creating()) {
-      Create vault
-    } @else {
-      Unlock
+    @if (creating()) {
+      <label>
+        Confirm passphrase
+        <input
+          type="password"
+          name="confirmation"
+          [(ngModel)]="confirmation"
+          autocomplete="new-password"
+          [disabled]="busy()"
+        />
+      </label>
+      <p class="hint">At least {{ minLength }} characters. A short sentence works well.</p>
     }
-  </button>
 
-  @if (error(); as message) {
-    <p class="error" role="alert">{{ message }}</p>
+    <button type="submit" [disabled]="busy()">
+      @if (busy()) {
+        Deriving keys…
+      } @else if (creating()) {
+        Create vault
+      } @else {
+        Unlock
+      }
+    </button>
+
+    @if (error(); as message) {
+      <p class="error" role="alert">{{ message }}</p>
+    }
   }
 </form>

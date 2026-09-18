@@ -65,8 +65,12 @@ API (bearer-token auth): `GET/PUT /api/vault` for the vault record,
 the user's other devices, skipping the originating `clientId`. History is
 capped at 200 items per user.
 
-The web client still stores items in localStorage; wiring it to this server
-is the next step.
+The web client talks to this server (base URL in `web/src/app/sync.config.ts`,
+default `http://localhost:8787`): the vault record and items live on the
+server, localStorage keeps an encrypted mirror for offline use, local-only
+changes are pushed on the next online load, and remote changes stream in over
+the WebSocket. A brand-new device only needs the Google login and the
+passphrase — it pulls the vault record from the server and unlocks.
 
 ## Architecture direction
 

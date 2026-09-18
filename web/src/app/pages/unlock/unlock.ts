@@ -20,6 +20,8 @@ export class Unlock {
   protected confirmation = '';
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
+  /** False until the vault record has been reconciled with the server. */
+  protected readonly ready = signal(false);
 
   protected readonly creating = computed(() => this.vault.status() === 'uninitialized');
   protected readonly minLength = MIN_PASSPHRASE_LENGTH;
@@ -27,7 +29,9 @@ export class Unlock {
   constructor() {
     if (this.vault.status() === 'unlocked') {
       this.router.navigateByUrl(this.returnUrl());
+      return;
     }
+    void this.vault.ensureMetadata().finally(() => this.ready.set(true));
   }
 
   protected async submit(): Promise<void> {

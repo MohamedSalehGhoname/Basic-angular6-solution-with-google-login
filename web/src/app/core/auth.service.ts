@@ -39,6 +39,15 @@ export class AuthService {
     }
   }
 
+  /** Fresh Firebase ID token for authenticating against the sync server. */
+  async idToken(): Promise<string> {
+    const user = firebaseAuth.currentUser;
+    if (!user) {
+      throw new Error('Not signed in.');
+    }
+    return user.getIdToken();
+  }
+
   async logout(): Promise<void> {
     await signOut(firebaseAuth);
     await this.router.navigateByUrl('/login');

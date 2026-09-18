@@ -1,14 +1,15 @@
 import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import { AuthService } from './auth.service';
 import { CryptoService, type KdfParams } from './crypto.service';
+import { SyncApi } from './sync-api';
 
 export type VaultStatus = 'uninitialized' | 'locked' | 'unlocked';
 
 /**
  * Persisted per account. None of this is secret: the wrapped vault key is
  * only recoverable with the passphrase, and the salt + KDF params must be
- * readable to attempt an unlock. Stored in localStorage until the sync
- * server exists, which will hold the same record.
+ * readable to attempt an unlock. The sync server holds the same record;
+ * localStorage acts as the offline cache.
  */
 interface VaultMetadata {
   version: 1;
@@ -27,11 +28,16 @@ interface VaultMetadata {
 export class VaultService {
   private readonly crypto = inject(CryptoService);
   private readonly auth = inject(AuthService);
+  private readonly syncApi = inject(SyncApi);
 
   private vaultKey: Uint8Array | null = null;
   private readonly unlockedUid = signal<string | null>(null);
+  /** Bumped whenever the cached metadata changes, so `status` re-evaluates. */
+  private readonly metadataVersion = signal(0);
+  private readonly metadataSynced = new Set<string>();
 
   readonly status = computed<VaultStatus>(() => {
+    this.metadataVersion();
     const user = this.auth.user();
     if (!user) {
       return 'locked';
@@ -52,6 +58,44 @@ export class VaultService {
     });
   }
 
+  /**
+   * Reconciles the cached vault record with the server once per account and
+   * session: pulls the server's record (how a new device learns about an
+   * existing vault), or pushes a local-only record up. Offline, the cache
+   * stands alone.
+   */
+  async ensureMetadata(): Promise<void> {
+    const uid = this.auth.user()?.uid;
+    if (!uid || this.metadataSynced.has(uid)) {
+      return;
+    }
+    try {
+      const remote = await this.syncApi.getVault();
+      if (remote) {
+        this.writeMetadata(uid, {
+          version: 1,
+          salt: remote.salt,
+          opsLimit: remote.opsLimit,
+          memLimit: remote.memLimit,
+          wrappedKey: remote.wrappedKey,
+        });
+      } else {
+        const local = this.readMetadata(uid);
+        if (local) {
+          await this.syncApi.putVault({
+            salt: local.salt,
+            opsLimit: local.opsLimit,
+            memLimit: local.memLimit,
+            wrappedKey: local.wrappedKey,
+          });
+        }
+      }
+      this.metadataSynced.add(uid);
+    } catch {
+      // Offline: the local cache is authoritative until the server is back.
+    }
+  }
+
   async createVault(passphrase: string, params?: KdfParams): Promise<void> {
     const uid = this.requireUid();
     const salt = await this.crypto.generateSalt();
@@ -68,6 +112,17 @@ export class VaultService {
       };
       this.writeMetadata(uid, metadata);
       this.setUnlocked(uid, vaultKey);
+      try {
+        await this.syncApi.putVault({
+          salt: metadata.salt,
+          opsLimit: metadata.opsLimit,
+          memLimit: metadata.memLimit,
+          wrappedKey: metadata.wrappedKey,
+        });
+        this.metadataSynced.add(uid);
+      } catch {
+        // Offline: ensureMetadata pushes the record on a later session.
+      }
     } finally {
       await this.crypto.zeroize(masterKey);
     }
@@ -153,5 +208,6 @@ export class VaultService {
 
   private writeMetadata(uid: string, metadata: VaultMetadata): void {
     localStorage.setItem(this.storageKey(uid), JSON.stringify(metadata));
+    this.metadataVersion.update((version) => version + 1);
   }
 }

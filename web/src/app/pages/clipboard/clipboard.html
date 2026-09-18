@@ -24,6 +24,12 @@
   <p class="error" role="alert">{{ message }}</p>
 }
 
+@if (!loading() && !store.online()) {
+  <p class="muted">
+    Offline — changes stay on this device and sync when the server is reachable.
+  </p>
+}
+
 @if (loading()) {
   <p class="muted">Decrypting your clipboard…</p>
 } @else if (store.items().length === 0) {

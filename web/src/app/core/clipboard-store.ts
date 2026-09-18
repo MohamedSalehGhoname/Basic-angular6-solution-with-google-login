@@ -1,5 +1,6 @@
 import { Injectable, effect, inject, signal } from '@angular/core';
 import { AuthService } from './auth.service';
+import { SyncApi, type SyncEvent } from './sync-api';
 import { VaultService } from './vault.service';
 
 export interface ClipboardEntry {
@@ -10,9 +11,9 @@ export interface ClipboardEntry {
 }
 
 /**
- * On-disk shape: everything but the item id is inside the encrypted blob,
- * so storage (and later the sync server) learns only how many items exist
- * and their order.
+ * Mirror shape, also what the server stores: everything but the item id is
+ * inside the encrypted blob, so neither storage nor server learns more than
+ * item count and order.
  */
 interface StoredItem {
   id: string;
@@ -28,13 +29,16 @@ const MAX_ITEMS = 200;
 
 /**
  * Clipboard history, decrypted in memory while the vault is unlocked.
- * Persisted per account in localStorage until the sync server exists;
- * locking the vault drops all plaintext.
+ * The sync server is the source of truth; localStorage keeps an encrypted
+ * mirror so the app works offline, and local-only items are pushed up on
+ * the next online load. Remote changes arrive over the WebSocket and are
+ * applied live. Locking the vault drops all plaintext and the connection.
  */
 @Injectable({ providedIn: 'root' })
 export class ClipboardStore {
   private readonly auth = inject(AuthService);
   private readonly vault = inject(VaultService);
+  private readonly syncApi = inject(SyncApi);
 
   private readonly _items = signal<ClipboardEntry[]>([]);
   readonly items = this._items.asReadonly();
@@ -43,7 +47,12 @@ export class ClipboardStore {
   private readonly _skipped = signal(0);
   readonly skipped = this._skipped.asReadonly();
 
+  /** Live connectivity to the sync server. */
+  private readonly _online = signal(false);
+  readonly online = this._online.asReadonly();
+
   private loadedUid: string | null = null;
+  private disconnect: (() => void) | null = null;
 
   constructor() {
     effect(() => {
@@ -51,6 +60,9 @@ export class ClipboardStore {
         this._items.set([]);
         this._skipped.set(0);
         this.loadedUid = null;
+        this.disconnect?.();
+        this.disconnect = null;
+        this._online.set(false);
       }
     });
   }
@@ -60,23 +72,54 @@ export class ClipboardStore {
     if (this.loadedUid === uid) {
       return;
     }
-    const stored = this.readStored(uid);
+
+    let storedItems = this.readStored(uid).items;
+    try {
+      const remote = await this.syncApi.listItems();
+      const remoteIds = new Set(remote.map((item) => item.id));
+      const localOnly = storedItems.filter((item) => !remoteIds.has(item.id));
+      for (const item of localOnly) {
+        try {
+          await this.syncApi.putItem(item.id, item.blob);
+        } catch {
+          // Pushed again on a later load.
+        }
+      }
+      storedItems = [
+        ...localOnly,
+        ...remote.map(({ id, blob }) => ({ id, blob })),
+      ];
+      this._online.set(true);
+    } catch {
+      this._online.set(false);
+    }
+
     const entries: ClipboardEntry[] = [];
+    const blobsById = new Map<string, string>();
     let skipped = 0;
-    for (const item of stored.items) {
+    for (const item of storedItems) {
       try {
         const payload = JSON.parse(await this.vault.decryptItem(item.blob)) as Omit<
           ClipboardEntry,
           'id'
         >;
         entries.push({ id: item.id, ...payload });
+        blobsById.set(item.id, item.blob);
       } catch {
         skipped += 1;
       }
     }
-    this._items.set(entries);
+    entries.sort((a, b) => b.copiedAt - a.copiedAt);
+    const capped = entries.slice(0, MAX_ITEMS);
+
+    this.writeStored(uid, {
+      version: 1,
+      items: capped.map((entry) => ({ id: entry.id, blob: blobsById.get(entry.id)! })),
+    });
+    this._items.set(capped);
     this._skipped.set(skipped);
     this.loadedUid = uid;
+    this.connectSocket();
   }
 
   async add(text: string): Promise<ClipboardEntry | null> {
@@ -98,19 +141,87 @@ export class ClipboardStore {
     stored.items = [{ id: entry.id, blob }, ...stored.items].slice(0, MAX_ITEMS);
     this.writeStored(uid, stored);
     this._items.update((items) => [entry, ...items].slice(0, MAX_ITEMS));
+
+    try {
+      await this.syncApi.putItem(entry.id, blob);
+      this._online.set(true);
+    } catch {
+      this._online.set(false);
+    }
     return entry;
   }
 
   remove(id: string): void {
     const uid = this.requireUid();
+    this.removeLocally(uid, id);
+    this.syncApi.deleteItem(id).catch(() => this._online.set(false));
+  }
+
+  clear(): void {
+    const uid = this.requireUid();
+    this.clearLocally(uid);
+    this.syncApi.clearItems().catch(() => this._online.set(false));
+  }
+
+  private connectSocket(): void {
+    if (this.disconnect) {
+      return;
+    }
+    this.disconnect = this.syncApi.connect(
+      (event) => void this.applyEvent(event),
+      (online) => this._online.set(online),
+    );
+  }
+
+  private async applyEvent(event: SyncEvent): Promise<void> {
+    const uid = this.auth.user()?.uid;
+    if (!uid || this.vault.status() !== 'unlocked') {
+      return;
+    }
+    switch (event.type) {
+      case 'item-added': {
+        if (this._items().some((item) => item.id === event.item.id)) {
+          return;
+        }
+        try {
+          const payload = JSON.parse(await this.vault.decryptItem(event.item.blob)) as Omit<
+            ClipboardEntry,
+            'id'
+          >;
+          const entry: ClipboardEntry = { id: event.item.id, ...payload };
+          const stored = this.readStored(uid);
+          stored.items = [
+            { id: entry.id, blob: event.item.blob },
+            ...stored.items.filter((item) => item.id !== entry.id),
+          ].slice(0, MAX_ITEMS);
+          this.writeStored(uid, stored);
+          this._items.update((items) => [entry, ...items].slice(0, MAX_ITEMS));
+        } catch {
+          this._skipped.update((count) => count + 1);
+        }
+        break;
+      }
+      case 'item-removed':
+        this.removeLocally(uid, event.id);
+        break;
+      case 'items-cleared':
+        this.clearLocally(uid);
+        break;
+      case 'vault-updated':
+        // The vault record changed on another device (e.g. passphrase
+        // change); nothing to do while this session stays unlocked.
+        break;
+    }
+  }
+
+  private removeLocally(uid: string, id: string): void {
     const stored = this.readStored(uid);
     stored.items = stored.items.filter((item) => item.id !== id);
     this.writeStored(uid, stored);
     this._items.update((items) => items.filter((item) => item.id !== id));
   }
 
-  clear(): void {
-    const uid = this.requireUid();
+  private clearLocally(uid: string): void {
     this.writeStored(uid, { version: 1, items: [] });
     this._items.set([]);
     this._skipped.set(0);

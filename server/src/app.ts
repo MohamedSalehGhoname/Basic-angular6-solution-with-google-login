@@ -1,3 +1,4 @@
+import cors from '@fastify/cors';
 import websocket from '@fastify/websocket';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import type { TokenVerifier } from './auth.js';
@@ -9,6 +10,8 @@ export interface AppOptions {
   verifyToken: TokenVerifier;
   /** Per-user history cap; oldest items beyond it are dropped. */
   maxItems?: number;
+  /** Allowed CORS origin(s); defaults to reflecting the request origin. */
+  corsOrigin?: string | string[] | boolean;
   logger?: boolean;
 }
 
@@ -70,6 +73,13 @@ export function buildApp(options: AppOptions): App {
     return typeof value === 'string' && value.length <= 64 ? value : null;
   };
 
+  // Auth is bearer-token only (no cookies), so reflecting the origin does not
+  // enable credentialed cross-site requests; restrict via CORS_ORIGIN anyway
+  // in production.
+  fastify.register(cors, {
+    origin: options.corsOrigin ?? true,
+    allowedHeaders: ['authorization', 'content-type', 'x-client-id'],
+  });
   fastify.register(websocket);
 
   fastify.get('/healthz', async () => ({ ok: true }));

@@ -15,9 +15,12 @@ if (!projectId && !insecureDev) {
   process.exit(1);
 }
 
+const corsOrigin = process.env['CORS_ORIGIN'];
+
 const { fastify } = buildApp({
   dbPath,
   verifyToken: insecureDev ? insecureDevVerifier() : firebaseTokenVerifier(projectId!),
+  corsOrigin: corsOrigin ? corsOrigin.split(',') : true,
   logger: true,
 });
 
