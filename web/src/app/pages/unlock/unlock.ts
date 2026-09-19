@@ -27,6 +27,8 @@ export class Unlock {
   protected readonly ready = signal(false);
   /** Whether the recovery-code form is shown instead of the passphrase form. */
   protected readonly usingRecovery = signal(false);
+  /** Reveals what was typed, e.g. to spot the wrong keyboard language or Caps Lock. */
+  protected readonly showPassphrase = signal(false);
 
   protected readonly creating = computed(() => this.vault.status() === 'uninitialized');
   protected readonly minLength = MIN_PASSPHRASE_LENGTH;
@@ -72,6 +74,7 @@ export class Unlock {
       }
       this.passphrase = '';
       this.confirmation = '';
+      this.showPassphrase.set(false);
       this.recoveryCode = '';
       await this.router.navigateByUrl(this.returnUrl());
     } catch (err) {

@@ -85,3 +85,15 @@ button[type='submit']:disabled {
   cursor: pointer;
   padding: 0.25rem;
 }
+
+.show-toggle {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.45rem;
+  cursor: pointer;
+}
+
+.show-toggle input {
+  padding: 0;
+  accent-color: var(--primary);
+}

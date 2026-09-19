@@ -42,15 +42,24 @@
   <form (ngSubmit)="changePassphrase()">
     <label class="field">
       {{ i18n.t('settings.current') }}
-      <input type="password" name="current" [(ngModel)]="current" autocomplete="current-password" />
+      <input [type]="showPassphrase() ? 'text' : 'password'" name="current" [(ngModel)]="current" autocomplete="current-password" />
     </label>
     <label class="field">
       {{ i18n.t('settings.new') }}
-      <input type="password" name="next" [(ngModel)]="next" autocomplete="new-password" />
+      <input [type]="showPassphrase() ? 'text' : 'password'" name="next" [(ngModel)]="next" autocomplete="new-password" />
     </label>
     <label class="field">
       {{ i18n.t('settings.confirmNew') }}
-      <input type="password" name="confirm" [(ngModel)]="confirm" autocomplete="new-password" />
+      <input [type]="showPassphrase() ? 'text' : 'password'" name="confirm" [(ngModel)]="confirm" autocomplete="new-password" />
+    </label>
+    <label class="check">
+      <input
+        type="checkbox"
+        name="showPassphrase"
+        [checked]="showPassphrase()"
+        (change)="showPassphrase.set($any($event.target).checked)"
+      />
+      {{ i18n.t('unlock.showPassphrase') }}
     </label>
     <div class="actions">
       <button type="submit" [disabled]="ppBusy() || !current || !next">

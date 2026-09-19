@@ -42,7 +42,7 @@
     <label>
       {{ i18n.t('unlock.passphrase') }}
       <input
-        type="password"
+        [type]="showPassphrase() ? 'text' : 'password'"
         name="passphrase"
         [(ngModel)]="passphrase"
         autocomplete="{{ creating() ? 'new-password' : 'current-password' }}"
@@ -55,7 +55,7 @@
       <label>
         {{ i18n.t('unlock.confirm') }}
         <input
-          type="password"
+          [type]="showPassphrase() ? 'text' : 'password'"
           name="confirmation"
           [(ngModel)]="confirmation"
           autocomplete="new-password"
@@ -64,6 +64,16 @@
       </label>
       <p class="hint">{{ i18n.t('unlock.minHint', { n: minLength }) }}</p>
     }
+
+    <label class="show-toggle">
+      <input
+        type="checkbox"
+        name="showPassphrase"
+        [checked]="showPassphrase()"
+        (change)="showPassphrase.set($any($event.target).checked)"
+      />
+      {{ i18n.t('unlock.showPassphrase') }}
+    </label>
 
     <button type="submit" [disabled]="busy()">
       @if (busy()) {

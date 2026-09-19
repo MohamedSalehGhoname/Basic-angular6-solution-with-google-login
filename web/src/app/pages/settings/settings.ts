@@ -36,6 +36,7 @@ export class Settings {
   protected readonly ppBusy = signal(false);
   protected readonly ppError = signal<string | null>(null);
   protected readonly ppDone = signal(false);
+  protected readonly showPassphrase = signal(false);
 
   // Recovery code
   protected readonly recoveryBusy = signal(false);
