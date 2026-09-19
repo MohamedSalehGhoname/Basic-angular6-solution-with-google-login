@@ -144,6 +144,14 @@ window. The overlay needs no passphrase: it only shows previews the already
 it never decrypts anything itself. While the vault is locked it shows an unlock
 hint and nothing else.
 
+On a pick, the item is placed on the OS clipboard (written from the main
+process, which needs no focused window) and a paste keystroke is sent to the
+app you were in — like Ditto. Auto-paste uses each OS's built-in scripting with
+no native module (SendKeys on Windows, System Events on macOS — which needs
+Accessibility permission — and `xdotool` on Linux); toggle it with the tray's
+"Paste on pick", or disable it with `CLIPSYNC_NO_AUTOPASTE=1`. With it off, the
+item still lands on the clipboard for a manual paste.
+
 ```bash
 cd desktop
 npm install

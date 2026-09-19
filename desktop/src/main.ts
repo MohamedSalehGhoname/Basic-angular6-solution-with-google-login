@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
@@ -41,6 +42,9 @@ const EXCLUSION_MARKERS = [
 // and pushes it here on startup and on every toggle.
 let captureEnabled = false;
 let captureSecrets = false;
+// After a pick, place the item on the clipboard and send a paste keystroke to
+// whatever app was focused before the overlay, like Ditto. Off via env var.
+let pasteOnPick = process.env['CLIPSYNC_NO_AUTOPASTE'] ? false : true;
 let mainWindow: BrowserWindow | null = null;
 let pickerWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -184,6 +188,14 @@ function buildTrayMenu(): Menu {
       click: () => mainWindow?.webContents.send('clipsync:request-toggle-capture'),
     },
     {
+      label: 'Paste on pick',
+      type: 'checkbox',
+      checked: pasteOnPick,
+      click: (item) => {
+        pasteOnPick = item.checked;
+      },
+    },
+    {
       label: 'Launch at login',
       type: 'checkbox',
       checked: app.getLoginItemSettings().openAtLogin,
@@ -298,7 +310,9 @@ function setupPicker(): void {
 async function writeToClipboard(payload: {
   text?: string;
   image?: string;
+  paste?: boolean;
 }): Promise<void> {
+  let wrote = false;
   try {
     if (payload?.image) {
       const match = /^data:(image\/[^;]+);base64,(.*)$/s.exec(payload.image);
@@ -308,12 +322,55 @@ async function writeToClipboard(payload: {
         const bytes = Uint8Array.from(Buffer.from(base64, 'base64'));
         const blob = new Blob([bytes], { type: mime });
         await clipboard.write([new ClipboardItem({ [mime]: blob })]);
+        wrote = true;
       }
     } else if (typeof payload?.text === 'string') {
       await clipboard.writeText(payload.text);
+      wrote = true;
     }
   } catch {
     // Best-effort; nothing to surface from the main process.
+  }
+  if (wrote && payload?.paste && pasteOnPick) {
+    // Give focus a moment to settle back on the previously-active window
+    // (the overlay was already hidden) before sending the paste keystroke.
+    setTimeout(pasteToActiveApp, 120);
+  }
+}
+
+/**
+ * Send a paste keystroke to the currently-focused application, so a picked item
+ * lands directly where the user was typing. Uses each OS's built-in scripting
+ * (no native module): SendKeys on Windows, System Events on macOS (needs
+ * Accessibility permission), xdotool on Linux (if installed). Best-effort.
+ */
+function pasteToActiveApp(): void {
+  try {
+    if (process.platform === 'win32') {
+      spawn(
+        'powershell.exe',
+        [
+          '-NoProfile',
+          '-NonInteractive',
+          '-Command',
+          "$wshell = New-Object -ComObject WScript.Shell; $wshell.SendKeys('^v')",
+        ],
+        { windowsHide: true, stdio: 'ignore' },
+      ).on('error', () => {});
+    } else if (process.platform === 'darwin') {
+      spawn(
+        'osascript',
+        ['-e', 'tell application "System Events" to keystroke "v" using command down'],
+        { stdio: 'ignore' },
+      ).on('error', () => {});
+    } else {
+      spawn('xdotool', ['key', '--clearmodifiers', 'ctrl+v'], { stdio: 'ignore' }).on(
+        'error',
+        () => {},
+      );
+    }
+  } catch {
+    // No scripting host available; the item is still on the clipboard.
   }
 }
 

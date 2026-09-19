@@ -43,7 +43,7 @@ const api = {
    * needs the document focused, which the hidden main window is not when the
    * picker overlay drives a copy — so route the decrypted value here instead.
    */
-  writeClipboard(payload: { text?: string; image?: string }): void {
+  writeClipboard(payload: { text?: string; image?: string; paste?: boolean }): void {
     ipcRenderer.send('clipsync:write-clipboard', payload);
   },
   setCaptureEnabled(enabled: boolean): void {

@@ -23,7 +23,7 @@ interface ClipsyncDesktopApi {
   onToggleCaptureRequested?(callback: () => void): () => void;
   updatePickerItems?(items: PickerItem[]): void;
   onPickerCopy?(callback: (id: string) => void): () => void;
-  writeClipboard?(payload: { text?: string; image?: string }): void;
+  writeClipboard?(payload: { text?: string; image?: string; paste?: boolean }): void;
   setCaptureEnabled(enabled: boolean): void;
   setCaptureSecrets(enabled: boolean): void;
 }
@@ -122,8 +122,11 @@ export class DesktopCaptureService {
     }
     try {
       if (this.desktop?.writeClipboard) {
+        // paste: true asks the shell to send Ctrl/Cmd+V to the active app.
         this.desktop.writeClipboard(
-          entry.image ? { image: entry.image } : { text: entry.text },
+          entry.image
+            ? { image: entry.image, paste: true }
+            : { text: entry.text, paste: true },
         );
       } else if (entry.image) {
         await this.native.copyImage(entry.image);
