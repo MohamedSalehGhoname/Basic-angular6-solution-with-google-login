@@ -11,7 +11,7 @@ import { SyncHub } from './hub.js';
 export interface AppOptions {
   dbPath: string;
   verifyToken: TokenVerifier;
-  /** Per-user history cap; oldest items beyond it are dropped. */
+  /** Per-user clipboard history cap; oldest items beyond it are dropped. */
   maxItems?: number;
   /** Allowed CORS origin(s); defaults to reflecting the request origin. */
   corsOrigin?: string | string[] | boolean;
@@ -74,7 +74,11 @@ const itemBodySchema = {
 
 // The server treats collections opaquely but allowlists the known ones so a
 // typo or hostile client cannot spawn arbitrary namespaces.
-const COLLECTIONS = ['clipboard', 'secrets'] as const;
+const COLLECTIONS = ['clipboard', 'secrets', 'groups'] as const;
+
+// Only the clipboard is a rolling history; secrets and their groups are kept
+// records, so their caps are just abuse limits, far above real use.
+const RECORD_CAPS: Record<string, number> = { secrets: 5000, groups: 1000 };
 
 const collectionParamsSchema = {
   type: 'object',
@@ -154,7 +158,8 @@ function accessKeyMatches(expected: string | undefined, presented: unknown): boo
 export function buildApp(options: AppOptions): App {
   const db = new SyncDb(options.dbPath);
   const hub = new SyncHub();
-  const maxItems = options.maxItems ?? 200;
+  const clipboardCap = options.maxItems ?? 200;
+  const capFor = (collection: string): number => RECORD_CAPS[collection] ?? clipboardCap;
   // Body limit above MAX_BLOB_LENGTH so image-bearing (ciphertext) items fit.
   const fastify = Fastify({ logger: options.logger ?? false, bodyLimit: 12 * 1024 * 1024 });
 
@@ -221,7 +226,7 @@ export function buildApp(options: AppOptions): App {
       async (request, reply) => {
         const { collection, id } = request.params as { collection: string; id: string };
         const { blob } = request.body as { blob: string };
-        const item = db.putItem(request.uid, collection, id, blob, maxItems);
+        const item = db.putItem(request.uid, collection, id, blob, capFor(collection));
         hub.broadcast(request.uid, { type: 'item-added', collection, item }, clientId(request));
         return reply.code(204).send();
       },

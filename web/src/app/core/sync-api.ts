@@ -21,7 +21,7 @@ export interface RemoteItem {
   createdAt: number;
 }
 
-export type Collection = 'clipboard' | 'secrets';
+export type Collection = 'clipboard' | 'secrets' | 'groups';
 
 export interface CreatedFile {
   fileId: string;

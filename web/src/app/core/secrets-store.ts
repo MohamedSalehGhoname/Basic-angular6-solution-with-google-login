@@ -17,6 +17,8 @@ export interface SecretFields {
   url: string;
   notes: string;
   attachments: Attachment[];
+  /** Group (folder) id; null/absent = top level. */
+  groupId?: string | null;
 }
 
 interface SecretPayload extends SecretFields {
@@ -59,6 +61,16 @@ export class SecretsStore extends SyncedCollection<SecretPayload> {
     });
   }
 
+  /** Moves a secret into a group (null = top level), keeping everything else. */
+  async move(id: string, groupId: string | null): Promise<void> {
+    const existing = this.items().find((entry) => entry.id === id);
+    if (!existing || (existing.groupId ?? null) === groupId) {
+      return;
+    }
+    const { id: _id, ...payload } = existing;
+    await this.update(id, { ...payload, groupId });
+  }
+
   protected override compare(a: SecretEntry, b: SecretEntry): number {
     return a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
   }
@@ -71,6 +83,7 @@ export class SecretsStore extends SyncedCollection<SecretPayload> {
       url: fields.url.trim(),
       notes: fields.notes,
       attachments: Array.isArray(fields.attachments) ? fields.attachments : [],
+      groupId: fields.groupId ?? null,
     };
   }
 }

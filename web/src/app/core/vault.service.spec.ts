@@ -131,7 +131,8 @@ describe('VaultService', () => {
     await expect(service.unlock('a long passphrase')).rejects.toThrow();
     await service.unlock('a different phrase');
     expect(await service.decryptItem(blob)).toBe('survives passphrase change');
-  });
+    // Three derivations at the real (moderate, 256 MiB) cost, not the fast test KDF.
+  }, 30_000);
 
   it('rejects a passphrase change with the wrong current passphrase', async () => {
     await service.createVault('a long passphrase', fastKdf);

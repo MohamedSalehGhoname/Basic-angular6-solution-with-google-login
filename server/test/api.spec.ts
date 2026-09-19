@@ -207,6 +207,25 @@ describe('sync API', () => {
     ]);
   });
 
+  it('never trims secrets or groups by the clipboard history cap', async () => {
+    for (const collection of ['secrets', 'groups']) {
+      for (let i = 1; i <= 5; i++) {
+        await app.fastify.inject({
+          method: 'PUT',
+          url: `/api/${collection}/items/item${i}`,
+          headers: auth('alice'),
+          payload: { blob: blob(`payload${i}`) },
+        });
+      }
+      const list = await app.fastify.inject({
+        method: 'GET',
+        url: `/api/${collection}/items`,
+        headers: auth('alice'),
+      });
+      expect(list.json().items).toHaveLength(5);
+    }
+  });
+
   it('isolates users from each other', async () => {
     await app.fastify.inject({
       method: 'PUT',

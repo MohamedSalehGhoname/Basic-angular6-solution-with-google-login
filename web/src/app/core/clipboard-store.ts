@@ -35,7 +35,8 @@ export const TTL_OPTIONS = [
   { label: 'Forever', ms: null },
 ] as const;
 
-const DEFAULT_TTL_MS: number | null = 24 * 60 * 60 * 1000;
+// Keep items until deleted unless the user picks an expiry (owner's choice).
+const DEFAULT_TTL_MS: number | null = null;
 const SWEEP_INTERVAL_MS = 30_000;
 const MAX_ITEMS = 200;
 
