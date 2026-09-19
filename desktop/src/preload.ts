@@ -1,9 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
-export interface CapturedPayload {
-  text: string;
-  potentialSecret: boolean;
-}
+export type CapturedPayload =
+  | { kind: 'text'; text: string; potentialSecret: boolean }
+  | { kind: 'image'; image: string };
 
 /**
  * The only surface the renderer (the web app) can see. contextIsolation keeps

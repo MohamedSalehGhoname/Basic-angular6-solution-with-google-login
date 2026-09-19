@@ -2,13 +2,14 @@ import { type CaptureDecision, evaluateCapture } from './policy.js';
 
 export interface ClipboardSnapshot {
   text: string;
+  /** Data URL of an image on the clipboard, or null. */
+  image?: string | null;
   formats: string[];
 }
 
-export interface Captured {
-  text: string;
-  potentialSecret: boolean;
-}
+export type Captured =
+  | { kind: 'text'; text: string; potentialSecret: boolean }
+  | { kind: 'image'; image: string };
 
 export interface WatcherOptions {
   /** Reads the current clipboard text and formats (may be async). */
@@ -33,6 +34,7 @@ export interface WatcherOptions {
 export class ClipboardWatcher {
   private readonly pollIntervalMs: number;
   private previousText: string | null = null;
+  private previousImage: string | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
 
   constructor(private readonly options: WatcherOptions) {
@@ -56,17 +58,23 @@ export class ClipboardWatcher {
   /** Runs one poll cycle; exposed for tests. */
   async poll(): Promise<void> {
     const snapshot = await this.options.read();
+    const image = snapshot.image ?? null;
     const decision = evaluateCapture({
       text: snapshot.text,
+      image,
       previousText: this.previousText,
+      previousImage: this.previousImage,
       formats: snapshot.formats,
       captureSecrets: this.options.captureSecrets?.() ?? false,
     });
 
-    // Track the latest non-empty clipboard value regardless of the enabled
-    // state or the decision, so toggling capture on does not re-capture it.
+    // Track the latest non-empty clipboard values regardless of the enabled
+    // state or the decision, so toggling capture on does not re-capture them.
     if (snapshot.text.trim().length > 0) {
       this.previousText = snapshot.text;
+    }
+    if (image) {
+      this.previousImage = image;
     }
 
     if (decision.action === 'skip') {
@@ -76,6 +84,14 @@ export class ClipboardWatcher {
     if (!this.options.isEnabled()) {
       return;
     }
-    this.options.onCapture({ text: snapshot.text, potentialSecret: decision.potentialSecret });
+    if (decision.kind === 'text') {
+      this.options.onCapture({
+        kind: 'text',
+        text: snapshot.text,
+        potentialSecret: decision.potentialSecret,
+      });
+    } else {
+      this.options.onCapture({ kind: 'image', image: image! });
+    }
   }
 }

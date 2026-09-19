@@ -20,8 +20,53 @@ let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let quitting = false;
 
+// Track image presence so a screenshot sitting on the clipboard is read (and
+// base64-encoded) only when it first appears, not on every poll. Known limit:
+// a direct image→image swap with no text in between is not re-captured.
+let lastHadImage = false;
+
+async function readClipboardImage(): Promise<string | null> {
+  try {
+    const items = await clipboard.read();
+    for (const item of items) {
+      const type = item.types?.find((t) => t.startsWith('image/'));
+      if (type) {
+        const blob = await item.getType(type);
+        if (blob instanceof Blob) {
+          const buffer = Buffer.from(await blob.arrayBuffer());
+          return `data:${type};base64,${buffer.toString('base64')}`;
+        }
+      }
+    }
+  } catch {
+    // Ignore; treat as no image.
+  }
+  return null;
+}
+
 async function readClipboard(): Promise<ClipboardSnapshot> {
   const text = await clipboard.readText();
+  let image: string | null = null;
+  if (text.trim().length === 0) {
+    let hasImage = false;
+    for (const type of ['image/png', 'image/jpeg', 'image/tiff']) {
+      try {
+        if (await clipboard.has(type)) {
+          hasImage = true;
+          break;
+        }
+      } catch {
+        // Ignore probe failures.
+      }
+    }
+    if (hasImage && !lastHadImage) {
+      image = await readClipboardImage();
+    }
+    lastHadImage = hasImage;
+  } else {
+    lastHadImage = false;
+  }
+
   const present = await Promise.all(
     EXCLUSION_MARKERS.map(async (marker) => {
       try {
@@ -31,7 +76,7 @@ async function readClipboard(): Promise<ClipboardSnapshot> {
       }
     }),
   );
-  return { text, formats: present.filter((marker): marker is string => marker !== null) };
+  return { text, image, formats: present.filter((marker): marker is string => marker !== null) };
 }
 
 function resolveWebEntry(): string | null {

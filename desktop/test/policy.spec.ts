@@ -8,7 +8,9 @@ import {
 
 const input = (over: Partial<PolicyInput>): PolicyInput => ({
   text: 'hello world',
+  image: null,
   previousText: null,
+  previousImage: null,
   formats: ['text/plain'],
   captureSecrets: false,
   ...over,
@@ -57,6 +59,7 @@ describe('evaluateCapture', () => {
   it('captures ordinary new text', () => {
     expect(evaluateCapture(input({ text: 'a fresh note' }))).toEqual({
       action: 'capture',
+      kind: 'text',
       potentialSecret: false,
     });
   });
@@ -82,7 +85,27 @@ describe('evaluateCapture', () => {
     });
     expect(evaluateCapture(input({ text: '123456', captureSecrets: true }))).toEqual({
       action: 'capture',
+      kind: 'text',
       potentialSecret: true,
     });
+  });
+
+  it('captures a new clipboard image when there is no text', () => {
+    const image = 'data:image/png;base64,AAAA';
+    expect(evaluateCapture(input({ text: '', image }))).toEqual({
+      action: 'capture',
+      kind: 'image',
+    });
+    // Unchanged image is skipped.
+    expect(evaluateCapture(input({ text: '', image, previousImage: image }))).toEqual({
+      action: 'skip',
+      reason: 'unchanged',
+    });
+  });
+
+  it('prefers text over an image when both are present', () => {
+    expect(
+      evaluateCapture(input({ text: 'note', image: 'data:image/png;base64,AAAA' })),
+    ).toMatchObject({ action: 'capture', kind: 'text' });
   });
 });

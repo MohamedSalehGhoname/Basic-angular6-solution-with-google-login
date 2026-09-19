@@ -2,7 +2,10 @@ import { Injectable, signal } from '@angular/core';
 import { type Entry, SyncedCollection } from './synced-collection';
 
 interface ClipboardPayload {
+  /** For a text item, the text; for an image item, a short label. */
   text: string;
+  /** Present for image items: a `data:image/…;base64,…` URL. */
+  image?: string;
   device: string;
   copiedAt: number;
   /** Epoch ms after which the item self-destructs; null/absent = keep forever. */
@@ -50,6 +53,29 @@ export class ClipboardStore extends SyncedCollection<ClipboardPayload> {
     const now = Date.now();
     return this.create({
       text,
+      device: options.device ?? 'Web',
+      copiedAt: now,
+      expiresAt: ttl === null ? null : now + ttl,
+    });
+  }
+
+  /** Adds a captured image (a data URL) as a clipboard item. */
+  async addImage(
+    image: string,
+    options: { device?: string; label?: string } = {},
+  ): Promise<ClipboardEntry | null> {
+    if (!image.startsWith('data:image/')) {
+      return null;
+    }
+    // Skip if this exact image is already the newest item (avoid duplicates).
+    if (this.items()[0]?.image === image) {
+      return null;
+    }
+    const ttl = this._ttlMs();
+    const now = Date.now();
+    return this.create({
+      text: options.label ?? 'Image',
+      image,
       device: options.device ?? 'Web',
       copiedAt: now,
       expiresAt: ttl === null ? null : now + ttl,

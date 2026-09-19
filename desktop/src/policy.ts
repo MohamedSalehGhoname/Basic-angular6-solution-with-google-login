@@ -5,12 +5,16 @@
  */
 
 export type CaptureDecision =
-  | { action: 'capture'; potentialSecret: boolean }
+  | { action: 'capture'; kind: 'text'; potentialSecret: boolean }
+  | { action: 'capture'; kind: 'image' }
   | { action: 'skip'; reason: 'empty' | 'unchanged' | 'excluded' | 'secret' };
 
 export interface PolicyInput {
   text: string;
+  /** Data URL of an image on the clipboard, or null. */
+  image: string | null;
   previousText: string | null;
+  previousImage: string | null;
   /** OS/clipboard formats currently present (e.g. from clipboard.availableFormats()). */
   formats: string[];
   /** When false (the default), values that look like secrets are not captured. */
@@ -91,18 +95,27 @@ export function looksLikeSecret(text: string): boolean {
 
 export function evaluateCapture(input: PolicyInput): CaptureDecision {
   const text = input.text;
-  if (text.trim().length === 0) {
-    return { action: 'skip', reason: 'empty' };
+  if (text.trim().length > 0) {
+    if (input.previousText !== null && text === input.previousText) {
+      return { action: 'skip', reason: 'unchanged' };
+    }
+    if (isExcludedFromHistory(input.formats)) {
+      return { action: 'skip', reason: 'excluded' };
+    }
+    const potentialSecret = looksLikeSecret(text);
+    if (potentialSecret && !input.captureSecrets) {
+      return { action: 'skip', reason: 'secret' };
+    }
+    return { action: 'capture', kind: 'text', potentialSecret };
   }
-  if (input.previousText !== null && text === input.previousText) {
-    return { action: 'skip', reason: 'unchanged' };
+  if (input.image) {
+    if (input.previousImage !== null && input.image === input.previousImage) {
+      return { action: 'skip', reason: 'unchanged' };
+    }
+    if (isExcludedFromHistory(input.formats)) {
+      return { action: 'skip', reason: 'excluded' };
+    }
+    return { action: 'capture', kind: 'image' };
   }
-  if (isExcludedFromHistory(input.formats)) {
-    return { action: 'skip', reason: 'excluded' };
-  }
-  const potentialSecret = looksLikeSecret(text);
-  if (potentialSecret && !input.captureSecrets) {
-    return { action: 'skip', reason: 'secret' };
-  }
-  return { action: 'capture', potentialSecret };
+  return { action: 'skip', reason: 'empty' };
 }

@@ -76,7 +76,13 @@
     @for (item of filtered(); track item.id) {
       <li>
         <div class="content">
-          <span class="preview">{{ item.text }}</span>
+          @if (item.image) {
+            <a [href]="item.image" [download]="item.text" target="_blank" rel="noopener" class="img-preview">
+              <img [src]="item.image" [alt]="item.text" />
+            </a>
+          } @else {
+            <span class="preview">{{ item.text }}</span>
+          }
           <span class="meta">
             {{ item.device }} · {{ item.copiedAt | date: 'short' }}
             @if (item.expiresAt != null) {
@@ -88,7 +94,7 @@
           <button type="button" (click)="copy(item)">
             {{ copiedId() === item.id ? i18n.t('clipboard.copied') : i18n.t('clipboard.copy') }}
           </button>
-          @if (native.canShare) {
+          @if (native.canShare && !item.image) {
             <button type="button" class="ghost" (click)="share(item)">
               {{ i18n.t('clipboard.share') }}
             </button>

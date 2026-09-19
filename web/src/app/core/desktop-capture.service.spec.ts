@@ -10,8 +10,8 @@ import { VaultService } from './vault.service';
 class FakeDesktop {
   isDesktop = true as const;
   enabledFlag = false;
-  private cb: ((p: { text: string; potentialSecret: boolean }) => void) | null = null;
-  onCaptured(cb: (p: { text: string; potentialSecret: boolean }) => void): () => void {
+  private cb: ((p: unknown) => void) | null = null;
+  onCaptured(cb: (p: unknown) => void): () => void {
     this.cb = cb;
     return () => {
       this.cb = null;
@@ -22,7 +22,10 @@ class FakeDesktop {
   }
   setCaptureSecrets(): void {}
   emit(text: string): void {
-    this.cb?.({ text, potentialSecret: false });
+    this.cb?.({ kind: 'text', text, potentialSecret: false });
+  }
+  emitImage(image: string): void {
+    this.cb?.({ kind: 'image', image });
   }
 }
 
@@ -30,6 +33,7 @@ describe('DesktopCaptureService', () => {
   const user = signal<{ uid: string } | null>({ uid: 'u1' });
   let status: WritableSignal<VaultStatus>;
   let add: ReturnType<typeof vi.fn>;
+  let addImage: ReturnType<typeof vi.fn>;
   let desktop: FakeDesktop;
 
   const inject = () => {
@@ -37,7 +41,7 @@ describe('DesktopCaptureService', () => {
       providers: [
         { provide: AuthService, useValue: { user } },
         { provide: VaultService, useValue: { status } },
-        { provide: ClipboardStore, useValue: { add } },
+        { provide: ClipboardStore, useValue: { add, addImage } },
       ],
     });
     return TestBed.inject(DesktopCaptureService);
@@ -48,6 +52,7 @@ describe('DesktopCaptureService', () => {
     user.set({ uid: 'u1' });
     status = signal<VaultStatus>('unlocked');
     add = vi.fn(async () => null);
+    addImage = vi.fn(async () => null);
     desktop = new FakeDesktop();
     (window as unknown as { clipsyncDesktop?: unknown }).clipsyncDesktop = desktop;
   });
@@ -73,6 +78,15 @@ describe('DesktopCaptureService', () => {
     desktop.emit('copied on desktop');
     await Promise.resolve();
     expect(add).toHaveBeenCalledWith('copied on desktop', { device: 'Desktop' });
+  });
+
+  it('routes a captured image to addImage', async () => {
+    localStorage.setItem('clipsync.desktop.capture', 'true');
+    inject();
+    desktop.emitImage('data:image/png;base64,AAAA');
+    await Promise.resolve();
+    expect(addImage).toHaveBeenCalledWith('data:image/png;base64,AAAA', { device: 'Desktop' });
+    expect(add).not.toHaveBeenCalled();
   });
 
   it('does not capture while disabled', async () => {

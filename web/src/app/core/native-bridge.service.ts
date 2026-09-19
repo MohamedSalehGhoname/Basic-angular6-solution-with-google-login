@@ -10,7 +10,7 @@ interface CapacitorGlobal {
   getPlatform?: () => string;
   Plugins?: {
     Clipboard?: {
-      write(options: { string: string }): Promise<void>;
+      write(options: { string?: string; image?: string }): Promise<void>;
       read(): Promise<{ value: string; type?: string }>;
     };
     Share?: {
@@ -48,6 +48,18 @@ export class NativeBridge {
       return (await clip.read()).value;
     }
     return navigator.clipboard.readText();
+  }
+
+  /** Copies an image (data URL) to the OS clipboard. */
+  async copyImage(dataUrl: string): Promise<void> {
+    const clip = capacitor()?.Plugins?.Clipboard;
+    if (clip) {
+      await clip.write({ image: dataUrl });
+      return;
+    }
+    const blob = await (await fetch(dataUrl)).blob();
+    // ClipboardItem is available in secure contexts (Electron renderer, https).
+    await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
   }
 
   /** Whether a share sheet is available (native, or the Web Share API). */

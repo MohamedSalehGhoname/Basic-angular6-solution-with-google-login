@@ -61,6 +61,20 @@ describe('ClipboardStore', () => {
     expect(store.items()).toEqual([]);
   });
 
+  it('adds and round-trips an image item', async () => {
+    const dataUrl = 'data:image/png;base64,iVBORw0KAAAA';
+    const entry = await store.addImage(dataUrl, { device: 'Desktop' });
+    expect(entry!.image).toBe(dataUrl);
+    expect(entry!.device).toBe('Desktop');
+    // Rejects non-image data and de-dupes the newest image.
+    expect(await store.addImage('not-a-data-url')).toBeNull();
+    expect(await store.addImage(dataUrl)).toBeNull();
+    // Stored as ciphertext, not the raw data URL.
+    for (const item of syncApi.items.values()) {
+      expect(item.blob).not.toContain('iVBORw0K');
+    }
+  });
+
   it('stores only ciphertext locally and on the server', async () => {
     await store.add('super secret text');
     const raw = localStorage.getItem('clipsync.clipboard.test-uid')!;

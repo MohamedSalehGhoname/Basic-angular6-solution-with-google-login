@@ -89,7 +89,11 @@ export class Clipboard {
   protected async copy(entry: ClipboardEntry): Promise<void> {
     this.error.set(null);
     try {
-      await this.native.copy(entry.text);
+      if (entry.image) {
+        await this.native.copyImage(entry.image);
+      } else {
+        await this.native.copy(entry.text);
+      }
       this.copiedId.set(entry.id);
       setTimeout(() => {
         if (this.copiedId() === entry.id) {

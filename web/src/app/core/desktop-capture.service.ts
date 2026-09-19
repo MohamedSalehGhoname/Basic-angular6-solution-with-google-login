@@ -3,10 +3,9 @@ import { AuthService } from './auth.service';
 import { ClipboardStore } from './clipboard-store';
 import { VaultService } from './vault.service';
 
-interface CapturedPayload {
-  text: string;
-  potentialSecret: boolean;
-}
+type CapturedPayload =
+  | { kind: 'text'; text: string; potentialSecret: boolean }
+  | { kind: 'image'; image: string };
 
 /** The API the Electron preload exposes on the window; absent in a browser. */
 interface ClipsyncDesktopApi {
@@ -45,7 +44,7 @@ export class DesktopCaptureService {
   readonly enabled = this._enabled.asReadonly();
 
   /** Captures that arrived while the vault was locked, flushed on unlock. */
-  private buffer: string[] = [];
+  private buffer: CapturedPayload[] = [];
 
   constructor() {
     if (!this.desktop) {
@@ -86,21 +85,25 @@ export class DesktopCaptureService {
     }
     if (this.vault.status() !== 'unlocked') {
       // Hold a bounded number until the vault is unlocked.
-      this.buffer = [...this.buffer, payload.text].slice(-MAX_BUFFER);
+      this.buffer = [...this.buffer, payload].slice(-MAX_BUFFER);
       return;
     }
-    await this.store(payload.text);
+    await this.store(payload);
   }
 
-  private async flush(pending: string[]): Promise<void> {
-    for (const text of pending) {
-      await this.store(text);
+  private async flush(pending: CapturedPayload[]): Promise<void> {
+    for (const payload of pending) {
+      await this.store(payload);
     }
   }
 
-  private async store(text: string): Promise<void> {
+  private async store(payload: CapturedPayload): Promise<void> {
     try {
-      await this.clipboard.add(text, { device: 'Desktop' });
+      if (payload.kind === 'image') {
+        await this.clipboard.addImage(payload.image, { device: 'Desktop' });
+      } else {
+        await this.clipboard.add(payload.text, { device: 'Desktop' });
+      }
     } catch {
       // Drop on failure; the value stays on the OS clipboard regardless.
     }
