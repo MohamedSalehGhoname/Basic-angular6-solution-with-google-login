@@ -4,6 +4,7 @@ import { unlockGuard } from './core/vault.guard';
 import { Clipboard } from './pages/clipboard/clipboard';
 import { Login } from './pages/login/login';
 import { Secrets } from './pages/secrets/secrets';
+import { Settings } from './pages/settings/settings';
 import { Unlock } from './pages/unlock/unlock';
 
 export const routes: Routes = [
@@ -20,6 +21,12 @@ export const routes: Routes = [
     component: Secrets,
     canActivate: [authGuard, unlockGuard],
     title: 'Secrets · Clipboard Sync',
+  },
+  {
+    path: 'settings',
+    component: Settings,
+    canActivate: [authGuard, unlockGuard],
+    title: 'Settings · Clipboard Sync',
   },
   { path: '**', redirectTo: '' },
 ];

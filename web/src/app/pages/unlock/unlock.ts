@@ -18,13 +18,21 @@ export class Unlock {
 
   protected passphrase = '';
   protected confirmation = '';
+  protected recoveryCode = '';
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
   /** False until the vault record has been reconciled with the server. */
   protected readonly ready = signal(false);
+  /** Whether the recovery-code form is shown instead of the passphrase form. */
+  protected readonly usingRecovery = signal(false);
 
   protected readonly creating = computed(() => this.vault.status() === 'uninitialized');
   protected readonly minLength = MIN_PASSPHRASE_LENGTH;
+
+  protected toggleRecovery(): void {
+    this.error.set(null);
+    this.usingRecovery.update((v) => !v);
+  }
 
   constructor() {
     if (this.vault.status() === 'unlocked') {
@@ -53,13 +61,16 @@ export class Unlock {
 
     this.busy.set(true);
     try {
-      if (this.creating()) {
+      if (this.usingRecovery()) {
+        await this.vault.unlockWithRecoveryCode(this.recoveryCode);
+      } else if (this.creating()) {
         await this.vault.createVault(this.passphrase);
       } else {
         await this.vault.unlock(this.passphrase);
       }
       this.passphrase = '';
       this.confirmation = '';
+      this.recoveryCode = '';
       await this.router.navigateByUrl(this.returnUrl());
     } catch (err) {
       this.error.set(err instanceof Error ? err.message : 'Something went wrong.');

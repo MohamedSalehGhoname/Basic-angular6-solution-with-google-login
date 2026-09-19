@@ -5,6 +5,8 @@ export interface VaultRecord {
   opsLimit: number;
   memLimit: number;
   wrappedKey: string;
+  /** Optional recovery-code-wrapped copy of the vault key, stored opaquely. */
+  recovery?: unknown;
   updatedAt: number;
 }
 
@@ -31,6 +33,7 @@ export class SyncDb {
         ops_limit   INTEGER NOT NULL,
         mem_limit   INTEGER NOT NULL,
         wrapped_key TEXT NOT NULL,
+        recovery    TEXT,
         updated_at  INTEGER NOT NULL
       );
       CREATE TABLE IF NOT EXISTS items (
@@ -49,10 +52,17 @@ export class SyncDb {
   getVault(uid: string): VaultRecord | null {
     const row = this.db
       .prepare(
-        'SELECT salt, ops_limit, mem_limit, wrapped_key, updated_at FROM vaults WHERE uid = ?',
+        'SELECT salt, ops_limit, mem_limit, wrapped_key, recovery, updated_at FROM vaults WHERE uid = ?',
       )
       .get(uid) as
-      | { salt: string; ops_limit: number; mem_limit: number; wrapped_key: string; updated_at: number }
+      | {
+          salt: string;
+          ops_limit: number;
+          mem_limit: number;
+          wrapped_key: string;
+          recovery: string | null;
+          updated_at: number;
+        }
       | undefined;
     if (!row) {
       return null;
@@ -62,24 +72,27 @@ export class SyncDb {
       opsLimit: row.ops_limit,
       memLimit: row.mem_limit,
       wrappedKey: row.wrapped_key,
+      recovery: row.recovery ? JSON.parse(row.recovery) : undefined,
       updatedAt: row.updated_at,
     };
   }
 
   putVault(uid: string, vault: Omit<VaultRecord, 'updatedAt'>): VaultRecord {
     const updatedAt = Date.now();
+    const recovery = vault.recovery === undefined ? null : JSON.stringify(vault.recovery);
     this.db
       .prepare(
-        `INSERT INTO vaults (uid, salt, ops_limit, mem_limit, wrapped_key, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)
+        `INSERT INTO vaults (uid, salt, ops_limit, mem_limit, wrapped_key, recovery, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (uid) DO UPDATE SET
            salt = excluded.salt,
            ops_limit = excluded.ops_limit,
            mem_limit = excluded.mem_limit,
            wrapped_key = excluded.wrapped_key,
+           recovery = excluded.recovery,
            updated_at = excluded.updated_at`,
       )
-      .run(uid, vault.salt, vault.opsLimit, vault.memLimit, vault.wrappedKey, updatedAt);
+      .run(uid, vault.salt, vault.opsLimit, vault.memLimit, vault.wrappedKey, recovery, updatedAt);
     return { ...vault, updatedAt };
   }
 

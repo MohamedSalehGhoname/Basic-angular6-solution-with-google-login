@@ -1,22 +1,20 @@
 import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import { AuthService } from './auth.service';
 import { CryptoService, type KdfParams } from './crypto.service';
-import { SyncApi } from './sync-api';
+import { SyncApi, type WrappedKeyRecord } from './sync-api';
 
 export type VaultStatus = 'uninitialized' | 'locked' | 'unlocked';
 
 /**
- * Persisted per account. None of this is secret: the wrapped vault key is
- * only recoverable with the passphrase, and the salt + KDF params must be
- * readable to attempt an unlock. The sync server holds the same record;
- * localStorage acts as the offline cache.
+ * Persisted per account. None of this is secret: a wrapped vault key is only
+ * recoverable with the passphrase (or recovery code), and the salt + KDF
+ * params must be readable to attempt an unlock. The sync server holds the
+ * same record; localStorage acts as the offline cache.
  */
-interface VaultMetadata {
+interface VaultMetadata extends WrappedKeyRecord {
   version: 1;
-  salt: string;
-  opsLimit: number;
-  memLimit: number;
-  wrappedKey: string;
+  /** Optional recovery-code-wrapped copy of the same vault key. */
+  recovery?: WrappedKeyRecord;
 }
 
 /**
@@ -32,7 +30,7 @@ export class VaultService {
 
   private vaultKey: Uint8Array | null = null;
   private readonly unlockedUid = signal<string | null>(null);
-  /** Bumped whenever the cached metadata changes, so `status` re-evaluates. */
+  /** Bumped whenever the cached metadata changes, so computeds re-evaluate. */
   private readonly metadataVersion = signal(0);
   private readonly metadataSynced = new Set<string>();
 
@@ -46,6 +44,13 @@ export class VaultService {
       return 'unlocked';
     }
     return this.readMetadata(user.uid) ? 'locked' : 'uninitialized';
+  });
+
+  /** Whether the current account's vault has a recovery code set. */
+  readonly hasRecovery = computed<boolean>(() => {
+    this.metadataVersion();
+    const uid = this.auth.user()?.uid;
+    return !!uid && !!this.readMetadata(uid)?.recovery;
   });
 
   constructor() {
@@ -78,16 +83,12 @@ export class VaultService {
           opsLimit: remote.opsLimit,
           memLimit: remote.memLimit,
           wrappedKey: remote.wrappedKey,
+          recovery: remote.recovery,
         });
       } else {
         const local = this.readMetadata(uid);
         if (local) {
-          await this.syncApi.putVault({
-            salt: local.salt,
-            opsLimit: local.opsLimit,
-            memLimit: local.memLimit,
-            wrappedKey: local.wrappedKey,
-          });
+          await this.syncApi.putVault(this.toRemote(local));
         }
       }
       this.metadataSynced.add(uid);
@@ -98,34 +99,14 @@ export class VaultService {
 
   async createVault(passphrase: string, params?: KdfParams): Promise<void> {
     const uid = this.requireUid();
-    const salt = await this.crypto.generateSalt();
     const kdf = params ?? (await this.crypto.defaultKdfParams());
-    const masterKey = await this.crypto.deriveMasterKey(passphrase, salt, kdf);
-    try {
-      const vaultKey = await this.crypto.generateVaultKey();
-      const metadata: VaultMetadata = {
-        version: 1,
-        salt: await this.crypto.toBase64(salt),
-        opsLimit: kdf.opsLimit,
-        memLimit: kdf.memLimit,
-        wrappedKey: await this.crypto.wrapKey(vaultKey, masterKey),
-      };
-      this.writeMetadata(uid, metadata);
-      this.setUnlocked(uid, vaultKey);
-      try {
-        await this.syncApi.putVault({
-          salt: metadata.salt,
-          opsLimit: metadata.opsLimit,
-          memLimit: metadata.memLimit,
-          wrappedKey: metadata.wrappedKey,
-        });
-        this.metadataSynced.add(uid);
-      } catch {
-        // Offline: ensureMetadata pushes the record on a later session.
-      }
-    } finally {
-      await this.crypto.zeroize(masterKey);
-    }
+    const vaultKey = await this.crypto.generateVaultKey();
+    const wrapped = await this.wrapWith(passphrase, vaultKey, kdf);
+    const metadata: VaultMetadata = { version: 1, ...wrapped };
+
+    this.writeMetadata(uid, metadata);
+    this.setUnlocked(uid, vaultKey);
+    await this.pushMetadata(uid, metadata);
   }
 
   async unlock(passphrase: string): Promise<void> {
@@ -134,19 +115,72 @@ export class VaultService {
     if (!metadata) {
       throw new Error('No vault exists for this account yet.');
     }
-    const masterKey = await this.crypto.deriveMasterKey(
-      passphrase,
-      await this.crypto.fromBase64(metadata.salt),
-      { opsLimit: metadata.opsLimit, memLimit: metadata.memLimit },
-    );
-    try {
-      const vaultKey = await this.crypto.unwrapKey(metadata.wrappedKey, masterKey);
-      this.setUnlocked(uid, vaultKey);
-    } catch {
+    const vaultKey = await this.unwrapWith(passphrase, metadata).catch(() => {
       throw new Error('Incorrect passphrase.');
-    } finally {
-      await this.crypto.zeroize(masterKey);
+    });
+    this.setUnlocked(uid, vaultKey);
+  }
+
+  async unlockWithRecoveryCode(code: string): Promise<void> {
+    const uid = this.requireUid();
+    const metadata = this.readMetadata(uid);
+    if (!metadata?.recovery) {
+      throw new Error('No recovery code is set for this account.');
     }
+    const vaultKey = await this.unwrapWith(normalizeCode(code), metadata.recovery).catch(() => {
+      throw new Error('Incorrect recovery code.');
+    });
+    this.setUnlocked(uid, vaultKey);
+  }
+
+  /** Re-wraps the vault key under a new passphrase. Requires the vault unlocked. */
+  async changePassphrase(current: string, next: string): Promise<void> {
+    const uid = this.requireUid();
+    const metadata = this.readMetadata(uid);
+    if (!metadata || this.status() !== 'unlocked') {
+      throw new Error('Unlock the vault before changing the passphrase.');
+    }
+    // Verify the current passphrase before allowing a change.
+    await this.unwrapWith(current, metadata).catch(() => {
+      throw new Error('Current passphrase is incorrect.');
+    });
+
+    const kdf = await this.crypto.defaultKdfParams();
+    const rewrapped = await this.wrapWith(next, this.requireVaultKey(), kdf);
+    const updated: VaultMetadata = { version: 1, ...rewrapped, recovery: metadata.recovery };
+    this.writeMetadata(uid, updated);
+    await this.pushMetadata(uid, updated);
+  }
+
+  /**
+   * Generates a recovery code, wraps the vault key with it, and returns the
+   * code to show once. Requires the vault unlocked. Replaces any existing code.
+   */
+  async addRecoveryCode(): Promise<string> {
+    const uid = this.requireUid();
+    const metadata = this.readMetadata(uid);
+    if (!metadata || this.status() !== 'unlocked') {
+      throw new Error('Unlock the vault before creating a recovery code.');
+    }
+    const code = generateRecoveryCode();
+    const kdf = await this.crypto.defaultKdfParams();
+    const recovery = await this.wrapWith(normalizeCode(code), this.requireVaultKey(), kdf);
+    const updated: VaultMetadata = { ...metadata, version: 1, recovery };
+    this.writeMetadata(uid, updated);
+    await this.pushMetadata(uid, updated);
+    return code;
+  }
+
+  async removeRecoveryCode(): Promise<void> {
+    const uid = this.requireUid();
+    const metadata = this.readMetadata(uid);
+    if (!metadata) {
+      return;
+    }
+    const { recovery: _drop, ...rest } = metadata;
+    const updated: VaultMetadata = { ...rest, version: 1 };
+    this.writeMetadata(uid, updated);
+    await this.pushMetadata(uid, updated);
   }
 
   lock(): void {
@@ -164,6 +198,58 @@ export class VaultService {
 
   async decryptItem(blob: string): Promise<string> {
     return this.crypto.decryptItem(blob, this.requireVaultKey());
+  }
+
+  /** Derives a key from `secret` and wraps `vaultKey` with it. */
+  private async wrapWith(
+    secret: string,
+    vaultKey: Uint8Array,
+    kdf: KdfParams,
+  ): Promise<WrappedKeyRecord> {
+    const salt = await this.crypto.generateSalt();
+    const derived = await this.crypto.deriveMasterKey(secret, salt, kdf);
+    try {
+      return {
+        salt: await this.crypto.toBase64(salt),
+        opsLimit: kdf.opsLimit,
+        memLimit: kdf.memLimit,
+        wrappedKey: await this.crypto.wrapKey(vaultKey, derived),
+      };
+    } finally {
+      await this.crypto.zeroize(derived);
+    }
+  }
+
+  /** Derives a key from `secret` and unwraps the vault key from `record`. */
+  private async unwrapWith(secret: string, record: WrappedKeyRecord): Promise<Uint8Array> {
+    const derived = await this.crypto.deriveMasterKey(secret, await this.crypto.fromBase64(record.salt), {
+      opsLimit: record.opsLimit,
+      memLimit: record.memLimit,
+    });
+    try {
+      return await this.crypto.unwrapKey(record.wrappedKey, derived);
+    } finally {
+      await this.crypto.zeroize(derived);
+    }
+  }
+
+  private toRemote(metadata: VaultMetadata) {
+    return {
+      salt: metadata.salt,
+      opsLimit: metadata.opsLimit,
+      memLimit: metadata.memLimit,
+      wrappedKey: metadata.wrappedKey,
+      recovery: metadata.recovery,
+    };
+  }
+
+  private async pushMetadata(uid: string, metadata: VaultMetadata): Promise<void> {
+    try {
+      await this.syncApi.putVault(this.toRemote(metadata));
+      this.metadataSynced.add(uid);
+    } catch {
+      // Offline: ensureMetadata pushes the record on a later session.
+    }
   }
 
   private setUnlocked(uid: string, vaultKey: Uint8Array): void {
@@ -210,4 +296,22 @@ export class VaultService {
     localStorage.setItem(this.storageKey(uid), JSON.stringify(metadata));
     this.metadataVersion.update((version) => version + 1);
   }
+}
+
+/** Human-friendly recovery code: 5 groups of 5 unambiguous characters. */
+function generateRecoveryCode(): string {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const buffer = new Uint32Array(25);
+  crypto.getRandomValues(buffer);
+  const chars = Array.from(buffer, (value) => alphabet[value % alphabet.length]);
+  const groups: string[] = [];
+  for (let i = 0; i < chars.length; i += 5) {
+    groups.push(chars.slice(i, i + 5).join(''));
+  }
+  return groups.join('-');
+}
+
+/** Codes compare case-insensitively and ignore spaces/dashes. */
+function normalizeCode(code: string): string {
+  return code.replace(/[\s-]/g, '').toUpperCase();
 }

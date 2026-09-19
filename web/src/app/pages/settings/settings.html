@@ -1,0 +1,80 @@
+<h1>Settings</h1>
+
+<section class="card">
+  <h2>Appearance</h2>
+  <label class="field">
+    Theme
+    <select [ngModel]="theme.preference()" (ngModelChange)="theme.set($event)">
+      @for (option of themeOptions; track option) {
+        <option [value]="option">{{ option }}</option>
+      }
+    </select>
+  </label>
+</section>
+
+<section class="card">
+  <h2>Change passphrase</h2>
+  <p class="muted">
+    Your passphrase encrypts everything. Changing it re-wraps your vault key —
+    your items are not re-encrypted and stay intact.
+  </p>
+  <form (ngSubmit)="changePassphrase()">
+    <label class="field">
+      Current passphrase
+      <input type="password" name="current" [(ngModel)]="current" autocomplete="current-password" />
+    </label>
+    <label class="field">
+      New passphrase
+      <input type="password" name="next" [(ngModel)]="next" autocomplete="new-password" />
+    </label>
+    <label class="field">
+      Confirm new passphrase
+      <input type="password" name="confirm" [(ngModel)]="confirm" autocomplete="new-password" />
+    </label>
+    <div class="actions">
+      <button type="submit" [disabled]="ppBusy() || !current || !next">
+        {{ ppBusy() ? 'Updating…' : 'Change passphrase' }}
+      </button>
+    </div>
+    @if (ppError(); as message) {
+      <p class="error" role="alert">{{ message }}</p>
+    }
+    @if (ppDone()) {
+      <p class="success" role="status">Passphrase changed.</p>
+    }
+  </form>
+</section>
+
+<section class="card">
+  <h2>Recovery code</h2>
+  <p class="muted">
+    A recovery code lets you unlock your vault if you forget your passphrase.
+    Store it somewhere safe — anyone with it can open your vault, and it is the
+    only way back in if the passphrase is lost.
+  </p>
+
+  @if (newRecoveryCode(); as code) {
+    <div class="recovery-reveal">
+      <p class="warn">
+        Write this down now. It is shown only once and cannot be retrieved later.
+      </p>
+      <code class="code">{{ code }}</code>
+      <button type="button" class="ghost" (click)="dismissCode()">I saved it</button>
+    </div>
+  } @else {
+    <p class="status">
+      Status: <strong>{{ vault.hasRecovery() ? 'a recovery code is set' : 'no recovery code' }}</strong>
+    </p>
+    <div class="actions">
+      <button type="button" (click)="generateRecoveryCode()" [disabled]="recoveryBusy()">
+        {{ recoveryBusy() ? 'Generating…' : vault.hasRecovery() ? 'Replace recovery code' : 'Create recovery code' }}
+      </button>
+      @if (vault.hasRecovery()) {
+        <button type="button" class="ghost danger" (click)="removeRecoveryCode()">Remove</button>
+      }
+    </div>
+  }
+  @if (recoveryError(); as message) {
+    <p class="error" role="alert">{{ message }}</p>
+  }
+</section>

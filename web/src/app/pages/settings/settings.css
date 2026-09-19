@@ -1,0 +1,125 @@
+h1 {
+  font-size: 1.3rem;
+  margin: 0 0 1.25rem;
+}
+
+.card {
+  padding: 1.25rem 1.35rem;
+  margin-bottom: 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+}
+
+.card h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+}
+
+.muted {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin: 0 0 1rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0.85rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  max-width: 22rem;
+}
+
+.field input,
+.field select {
+  padding: 0.55rem 0.65rem;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.field input:focus,
+.field select:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+button {
+  padding: 0.5rem 0.95rem;
+  font: inherit;
+  font-size: 0.9rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--primary);
+  color: var(--on-primary);
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+button.ghost {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+}
+
+button.ghost.danger {
+  color: var(--danger);
+  border-color: var(--danger-border);
+}
+
+.error {
+  color: var(--danger);
+  font-size: 0.875rem;
+  margin: 0.75rem 0 0;
+}
+
+.success {
+  color: var(--success);
+  font-size: 0.875rem;
+  margin: 0.75rem 0 0;
+}
+
+.status {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.recovery-reveal {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  border-radius: var(--radius-md);
+}
+
+.recovery-reveal .warn {
+  margin: 0;
+  color: var(--warn-text);
+  font-size: 0.875rem;
+}
+
+.code {
+  font-family: var(--mono);
+  font-size: 1.15rem;
+  letter-spacing: 0.08em;
+  color: var(--text);
+  user-select: all;
+}

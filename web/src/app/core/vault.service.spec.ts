@@ -120,4 +120,61 @@ describe('VaultService', () => {
     user.set({ uid: 'other-uid' });
     expect(service.status()).toBe('uninitialized');
   });
+
+  it('changes the passphrase and keeps the same vault key', async () => {
+    await service.createVault('a long passphrase', fastKdf);
+    const blob = await service.encryptItem('survives passphrase change');
+
+    await service.changePassphrase('a long passphrase', 'a different phrase');
+    // Old passphrase no longer works; new one does.
+    service.lock();
+    await expect(service.unlock('a long passphrase')).rejects.toThrow();
+    await service.unlock('a different phrase');
+    expect(await service.decryptItem(blob)).toBe('survives passphrase change');
+  });
+
+  it('rejects a passphrase change with the wrong current passphrase', async () => {
+    await service.createVault('a long passphrase', fastKdf);
+    await expect(service.changePassphrase('wrong', 'a different phrase')).rejects.toThrowError(
+      /Current passphrase is incorrect/,
+    );
+  });
+
+  it('creates a recovery code that unlocks the vault', async () => {
+    await service.createVault('a long passphrase', fastKdf);
+    const blob = await service.encryptItem('recoverable');
+    const code = await service.addRecoveryCode();
+    expect(service.hasRecovery()).toBe(true);
+    expect(code).toMatch(/^[A-Z0-9]{5}(-[A-Z0-9]{5}){4}$/);
+
+    service.lock();
+    await service.unlockWithRecoveryCode(code);
+    expect(service.status()).toBe('unlocked');
+    expect(await service.decryptItem(blob)).toBe('recoverable');
+  });
+
+  it('accepts the recovery code case-insensitively and ignoring dashes', async () => {
+    await service.createVault('a long passphrase', fastKdf);
+    const code = await service.addRecoveryCode();
+    service.lock();
+    await service.unlockWithRecoveryCode(code.replace(/-/g, '').toLowerCase());
+    expect(service.status()).toBe('unlocked');
+  });
+
+  it('rejects an incorrect recovery code and removes it on request', async () => {
+    await service.createVault('a long passphrase', fastKdf);
+    await service.addRecoveryCode();
+    service.lock();
+    await expect(service.unlockWithRecoveryCode('AAAAA-BBBBB-CCCCC-DDDDD-EEEEE')).rejects.toThrow();
+
+    await service.unlock('a long passphrase');
+    await service.removeRecoveryCode();
+    expect(service.hasRecovery()).toBe(false);
+  });
+
+  it('persists the recovery code to the server record', async () => {
+    await service.createVault('a long passphrase', fastKdf);
+    await service.addRecoveryCode();
+    expect(syncApi.vault?.recovery).toBeTruthy();
+  });
 });

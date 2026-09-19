@@ -74,3 +74,14 @@ button[type='submit']:disabled {
   color: var(--danger);
   font-size: 0.875rem;
 }
+
+.link {
+  align-self: center;
+  background: none;
+  border: none;
+  color: var(--primary);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0.25rem;
+}

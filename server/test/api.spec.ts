@@ -90,6 +90,37 @@ describe('sync API', () => {
     });
   });
 
+  it('round-trips a vault record with a recovery blob', async () => {
+    const put = await app.fastify.inject({
+      method: 'PUT',
+      url: '/api/vault',
+      headers: auth('alice'),
+      payload: {
+        salt: 'c2FsdA',
+        opsLimit: 3,
+        memLimit: 268435456,
+        wrappedKey: blob('wrapped'),
+        recovery: {
+          salt: 'cmVjb3Zlcg',
+          opsLimit: 3,
+          memLimit: 268435456,
+          wrappedKey: blob('recoverywrap'),
+        },
+      },
+    });
+    expect(put.statusCode).toBe(204);
+
+    const after = await app.fastify.inject({
+      method: 'GET',
+      url: '/api/vault',
+      headers: auth('alice'),
+    });
+    expect(after.json().recovery).toMatchObject({
+      salt: 'cmVjb3Zlcg',
+      wrappedKey: blob('recoverywrap'),
+    });
+  });
+
   it('rejects payloads that are not ciphertext-shaped', async () => {
     const badVault = await app.fastify.inject({
       method: 'PUT',

@@ -1,19 +1,48 @@
 <form class="unlock-card" (ngSubmit)="submit()">
   @if (!ready()) {
     <p class="hint">Checking for an existing vault…</p>
+  } @else if (usingRecovery()) {
+    <h1>Use a recovery code</h1>
+    <p>Enter the recovery code you saved when you set it up.</p>
   } @else if (creating()) {
     <h1>Create your vault</h1>
     <p>
       Choose a passphrase to encrypt your clipboard. It never leaves this
-      device and <strong>cannot be recovered</strong> — if you forget it,
-      the vault's contents are lost.
+      device. Set up a recovery code afterwards in Settings if you want a way
+      back in — otherwise a forgotten passphrase means the vault is lost.
     </p>
   } @else {
     <h1>Unlock your vault</h1>
     <p>Enter your passphrase to decrypt your clipboard on this device.</p>
   }
 
-  @if (ready()) {
+  @if (ready() && usingRecovery()) {
+    <label>
+      Recovery code
+      <input
+        type="text"
+        name="recoveryCode"
+        [(ngModel)]="recoveryCode"
+        autocomplete="off"
+        spellcheck="false"
+        placeholder="XXXXX-XXXXX-XXXXX-XXXXX-XXXXX"
+        [disabled]="busy()"
+        autofocus
+      />
+    </label>
+
+    <button type="submit" [disabled]="busy()">
+      {{ busy() ? 'Deriving keys…' : 'Unlock with code' }}
+    </button>
+
+    @if (error(); as message) {
+      <p class="error" role="alert">{{ message }}</p>
+    }
+
+    <button type="button" class="link" (click)="toggleRecovery()">
+      Back to passphrase
+    </button>
+  } @else if (ready()) {
     <label>
       Passphrase
       <input
@@ -52,6 +81,12 @@
 
     @if (error(); as message) {
       <p class="error" role="alert">{{ message }}</p>
+    }
+
+    @if (!creating()) {
+      <button type="button" class="link" (click)="toggleRecovery()">
+        Forgot your passphrase? Use a recovery code
+      </button>
     }
   }
 </form>

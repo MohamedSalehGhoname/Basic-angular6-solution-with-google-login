@@ -27,15 +27,26 @@ const BLOB_PATTERN = '^xcv1:[A-Za-z0-9_-]+$';
 const BASE64URL_PATTERN = '^[A-Za-z0-9_-]+$';
 const MAX_BLOB_LENGTH = 256 * 1024;
 
+const wrappedKeyProps = {
+  salt: { type: 'string', pattern: BASE64URL_PATTERN, maxLength: 128 },
+  opsLimit: { type: 'integer', minimum: 1 },
+  memLimit: { type: 'integer', minimum: 1 },
+  wrappedKey: { type: 'string', pattern: BLOB_PATTERN, maxLength: 1024 },
+} as const;
+
 const vaultBodySchema = {
   type: 'object',
   required: ['salt', 'opsLimit', 'memLimit', 'wrappedKey'],
   additionalProperties: false,
   properties: {
-    salt: { type: 'string', pattern: BASE64URL_PATTERN, maxLength: 128 },
-    opsLimit: { type: 'integer', minimum: 1 },
-    memLimit: { type: 'integer', minimum: 1 },
-    wrappedKey: { type: 'string', pattern: BLOB_PATTERN, maxLength: 1024 },
+    ...wrappedKeyProps,
+    // Optional recovery-code-wrapped copy of the vault key.
+    recovery: {
+      type: 'object',
+      required: ['salt', 'opsLimit', 'memLimit', 'wrappedKey'],
+      additionalProperties: false,
+      properties: wrappedKeyProps,
+    },
   },
 } as const;
 

@@ -2,11 +2,16 @@ import { Injectable, inject } from '@angular/core';
 import { syncConfig } from '../sync.config';
 import { AuthService } from './auth.service';
 
-export interface RemoteVault {
+export interface WrappedKeyRecord {
   salt: string;
   opsLimit: number;
   memLimit: number;
   wrappedKey: string;
+}
+
+export interface RemoteVault extends WrappedKeyRecord {
+  /** Optional recovery-code-wrapped copy of the vault key. */
+  recovery?: WrappedKeyRecord;
 }
 
 export interface RemoteItem {
