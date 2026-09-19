@@ -9,8 +9,20 @@ import {
   globalShortcut,
   ipcMain,
   nativeImage,
+  screen,
 } from 'electron';
 import { ClipboardWatcher, type ClipboardSnapshot } from './clipboard-watcher.js';
+
+/** A single clipboard entry as shown in the compact picker overlay. */
+interface PickerItem {
+  id: string;
+  kind: 'text' | 'image';
+  /** Truncated text, or an image data URL for image items. */
+  preview: string;
+}
+
+const PICKER_WIDTH = 380;
+const PICKER_HEIGHT = 480;
 
 // Global shortcut that brings up the window on the clipboard list to pick from.
 const PICKER_SHORTCUT = process.env['CLIPSYNC_HOTKEY'] ?? 'CommandOrControl+Shift+V';
@@ -29,8 +41,14 @@ const EXCLUSION_MARKERS = [
 let captureEnabled = false;
 let captureSecrets = false;
 let mainWindow: BrowserWindow | null = null;
+let pickerWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let quitting = false;
+
+// Latest clipboard previews pushed by the (unlocked) main renderer. The picker
+// overlay never decrypts anything itself — it just shows these previews and
+// asks the main renderer to copy the chosen id, so it never needs the vault.
+let pickerItems: PickerItem[] = [];
 
 // Track image presence so a screenshot sitting on the clipboard is read (and
 // base64-encoded) only when it first appears, not on every poll. Known limit:
@@ -193,10 +211,81 @@ function setupTray(): void {
   refreshTrayMenu();
 }
 
+function createPickerWindow(): BrowserWindow {
+  const win = new BrowserWindow({
+    width: PICKER_WIDTH,
+    height: PICKER_HEIGHT,
+    show: false,
+    frame: false,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    transparent: true,
+    backgroundColor: '#00000000',
+    webPreferences: {
+      preload: join(__dirname, 'picker-preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  win.setAlwaysOnTop(true, 'pop-up-menu');
+  void win.loadFile(join(__dirname, '..', 'assets', 'picker.html'));
+  // Dismiss like a native context menu when it loses focus.
+  win.on('blur', () => win.hide());
+  win.on('closed', () => {
+    pickerWindow = null;
+  });
+  return win;
+}
+
+function positionPickerAtCursor(win: BrowserWindow): void {
+  const cursor = screen.getCursorScreenPoint();
+  const display = screen.getDisplayNearestPoint(cursor);
+  const { x: ax, y: ay, width: aw, height: ah } = display.workArea;
+  // Anchor near the cursor but keep the whole overlay on-screen.
+  const x = Math.min(Math.max(cursor.x, ax), ax + aw - PICKER_WIDTH);
+  const y = Math.min(Math.max(cursor.y, ay), ay + ah - PICKER_HEIGHT);
+  win.setPosition(Math.round(x), Math.round(y));
+}
+
 function showPicker(): void {
-  showWindow();
-  // Ask the renderer to route to the clipboard list and focus its search.
-  mainWindow?.webContents.send('clipsync:show-picker');
+  if (!pickerWindow) {
+    pickerWindow = createPickerWindow();
+  }
+  const win = pickerWindow;
+  const reveal = (): void => {
+    positionPickerAtCursor(win);
+    win.webContents.send('picker:items', pickerItems);
+    win.show();
+    win.focus();
+  };
+  if (win.webContents.isLoading()) {
+    win.webContents.once('did-finish-load', reveal);
+  } else {
+    reveal();
+  }
+}
+
+function setupPicker(): void {
+  // The main renderer pushes clipboard previews here whenever its list changes.
+  ipcMain.on('clipsync:update-picker', (_event, items: PickerItem[]) => {
+    pickerItems = Array.isArray(items) ? items : [];
+    if (pickerWindow && pickerWindow.isVisible()) {
+      pickerWindow.webContents.send('picker:items', pickerItems);
+    }
+  });
+  // The overlay reports the chosen id; the main renderer copies it (reusing its
+  // existing decrypt+copy path) and we dismiss the overlay.
+  ipcMain.on('picker:pick', (_event, id: string) => {
+    mainWindow?.webContents.send('clipsync:picker-copy', id);
+    pickerWindow?.hide();
+  });
+  ipcMain.on('picker:close', () => pickerWindow?.hide());
 }
 
 function setupGlobalShortcut(): void {
@@ -237,6 +326,7 @@ if (!app.requestSingleInstanceLock()) {
     createWindow();
     setupTray();
     setupCapture();
+    setupPicker();
     setupGlobalShortcut();
 
     app.on('activate', () => {

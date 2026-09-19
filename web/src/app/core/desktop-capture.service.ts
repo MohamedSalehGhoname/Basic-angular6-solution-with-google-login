@@ -1,19 +1,28 @@
 import { Injectable, effect, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
 import { AuthService } from './auth.service';
 import { ClipboardStore } from './clipboard-store';
+import { NativeBridge } from './native-bridge.service';
 import { VaultService } from './vault.service';
 
 type CapturedPayload =
   | { kind: 'text'; text: string; potentialSecret: boolean }
   | { kind: 'image'; image: string };
 
+/** A clipboard entry preview handed to the compact picker overlay. */
+interface PickerItem {
+  id: string;
+  kind: 'text' | 'image';
+  /** Truncated text, or an image data URL for image items. */
+  preview: string;
+}
+
 /** The API the Electron preload exposes on the window; absent in a browser. */
 interface ClipsyncDesktopApi {
   isDesktop: true;
   onCaptured(callback: (payload: CapturedPayload) => void): () => void;
   onToggleCaptureRequested?(callback: () => void): () => void;
-  onShowPicker?(callback: () => void): () => void;
+  updatePickerItems?(items: PickerItem[]): void;
+  onPickerCopy?(callback: (id: string) => void): () => void;
   setCaptureEnabled(enabled: boolean): void;
   setCaptureSecrets(enabled: boolean): void;
 }
@@ -26,6 +35,9 @@ declare global {
 
 const ENABLED_KEY = 'clipsync.desktop.capture';
 const MAX_BUFFER = 20;
+/** How many items the overlay lists, and how long each text preview runs. */
+const PICKER_MAX_ITEMS = 60;
+const PICKER_PREVIEW_CHARS = 200;
 
 /**
  * Bridges OS clipboard captures from the Electron shell into the encrypted
@@ -38,7 +50,7 @@ export class DesktopCaptureService {
   private readonly clipboard = inject(ClipboardStore);
   private readonly vault = inject(VaultService);
   private readonly auth = inject(AuthService);
-  private readonly router = inject(Router);
+  private readonly native = inject(NativeBridge);
 
   private readonly desktop = window.clipsyncDesktop;
   readonly available = !!this.desktop;
@@ -58,8 +70,16 @@ export class DesktopCaptureService {
     this.desktop.onCaptured((payload) => void this.handleCapture(payload));
     // The tray menu can ask to toggle capture; keep our state authoritative.
     this.desktop.onToggleCaptureRequested?.(() => this.setEnabled(!this._enabled()));
-    // Global hotkey: jump to the clipboard list and focus its search box.
-    this.desktop.onShowPicker?.(() => void this.showPicker());
+    // Global hotkey overlay: it asks us (the unlocked renderer) to copy an id,
+    // so the picker never has to decrypt anything or prompt for the passphrase.
+    this.desktop.onPickerCopy?.((id) => void this.copyById(id));
+
+    // Feed the overlay previews of the current clipboard list. The previews
+    // are already-decrypted in-memory items; nothing is re-decrypted, and when
+    // the vault is locked the list is empty so the overlay shows an unlock hint.
+    effect(() => {
+      this.desktop?.updatePickerItems?.(this.pickerItems());
+    });
 
     // Flush anything captured while locked, once the vault is unlocked again.
     effect(() => {
@@ -71,13 +91,37 @@ export class DesktopCaptureService {
     });
   }
 
-  private async showPicker(): Promise<void> {
-    await this.router.navigateByUrl('/');
-    // Focus the search box so the user can filter and pick immediately.
-    setTimeout(() => {
-      const search = document.querySelector<HTMLInputElement>('input.search');
-      search?.focus();
-    }, 120);
+  /** Truncated previews of the newest items for the picker overlay. */
+  private pickerItems(): PickerItem[] {
+    return this.clipboard
+      .items()
+      .slice(0, PICKER_MAX_ITEMS)
+      .map((entry) =>
+        entry.image
+          ? { id: entry.id, kind: 'image' as const, preview: entry.image }
+          : {
+              id: entry.id,
+              kind: 'text' as const,
+              preview: entry.text.slice(0, PICKER_PREVIEW_CHARS),
+            },
+      );
+  }
+
+  /** Copy the chosen clipboard entry, reusing the normal decrypt+copy path. */
+  private async copyById(id: string): Promise<void> {
+    const entry = this.clipboard.items().find((item) => item.id === id);
+    if (!entry) {
+      return;
+    }
+    try {
+      if (entry.image) {
+        await this.native.copyImage(entry.image);
+      } else {
+        await this.native.copy(entry.text);
+      }
+    } catch {
+      // Nothing to surface from the background; the item stays in the list.
+    }
   }
 
   setEnabled(enabled: boolean): void {

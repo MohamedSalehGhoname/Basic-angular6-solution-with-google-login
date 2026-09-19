@@ -137,8 +137,12 @@ capture, toggle launch-at-login, or quit), keeps running when the window is
 closed so capture continues, and is single-instance. Captured items can be text
 **or images** (copy a screenshot and it is stored, encrypted, as an image
 item). A global hotkey — `Ctrl/Cmd+Shift+V` by default, overridable with
-`CLIPSYNC_HOTKEY` — brings the window up on the clipboard list with the search
-focused, to pick and copy quickly.
+`CLIPSYNC_HOTKEY` — pops up a compact Ditto-style overlay at the cursor to
+search, pick (↑↓/Enter or click), and paste an item without opening the main
+window. The overlay needs no passphrase: it only shows previews the already
+-unlocked main window pushes to it and asks that window to copy your choice, so
+it never decrypts anything itself. While the vault is locked it shows an unlock
+hint and nothing else.
 
 ```bash
 cd desktop

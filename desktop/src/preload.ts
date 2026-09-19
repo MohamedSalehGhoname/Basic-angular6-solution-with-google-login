@@ -4,6 +4,13 @@ export type CapturedPayload =
   | { kind: 'text'; text: string; potentialSecret: boolean }
   | { kind: 'image'; image: string };
 
+/** A clipboard entry preview pushed to the compact picker overlay. */
+export interface PickerItem {
+  id: string;
+  kind: 'text' | 'image';
+  preview: string;
+}
+
 /**
  * The only surface the renderer (the web app) can see. contextIsolation keeps
  * Node out of the page; captured clipboard text arrives here and the renderer
@@ -21,10 +28,15 @@ const api = {
     ipcRenderer.on('clipsync:request-toggle-capture', listener);
     return () => ipcRenderer.removeListener('clipsync:request-toggle-capture', listener);
   },
-  onShowPicker(callback: () => void): () => void {
-    const listener = () => callback();
-    ipcRenderer.on('clipsync:show-picker', listener);
-    return () => ipcRenderer.removeListener('clipsync:show-picker', listener);
+  /** Push the current clipboard previews to the picker overlay. */
+  updatePickerItems(items: PickerItem[]): void {
+    ipcRenderer.send('clipsync:update-picker', items);
+  },
+  /** The overlay asked to copy this item id; do it via the normal copy path. */
+  onPickerCopy(callback: (id: string) => void): () => void {
+    const listener = (_event: unknown, id: string) => callback(id);
+    ipcRenderer.on('clipsync:picker-copy', listener);
+    return () => ipcRenderer.removeListener('clipsync:picker-copy', listener);
   },
   setCaptureEnabled(enabled: boolean): void {
     ipcRenderer.send('clipsync:set-enabled', enabled);
