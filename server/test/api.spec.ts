@@ -29,6 +29,24 @@ describe('sync API', () => {
     expect(res.statusCode).toBe(200);
   });
 
+  it('allows the write methods and headers the browser preflights', async () => {
+    const res = await app.fastify.inject({
+      method: 'OPTIONS',
+      url: '/api/items/abc',
+      headers: {
+        origin: 'http://localhost:4200',
+        'access-control-request-method': 'PUT',
+        'access-control-request-headers': 'authorization,content-type,x-client-id',
+      },
+    });
+    expect(res.statusCode).toBeLessThan(300);
+    const allowMethods = res.headers['access-control-allow-methods'] as string;
+    expect(allowMethods).toContain('PUT');
+    expect(allowMethods).toContain('DELETE');
+    const allowHeaders = res.headers['access-control-allow-headers'] as string;
+    expect(allowHeaders.toLowerCase()).toContain('x-client-id');
+  });
+
   it('rejects missing and invalid tokens', async () => {
     const missing = await app.fastify.inject({ method: 'GET', url: '/api/items' });
     expect(missing.statusCode).toBe(401);

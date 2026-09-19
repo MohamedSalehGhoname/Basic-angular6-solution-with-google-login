@@ -78,6 +78,7 @@ export function buildApp(options: AppOptions): App {
   // in production.
   fastify.register(cors, {
     origin: options.corsOrigin ?? true,
+    methods: ['GET', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['authorization', 'content-type', 'x-client-id'],
   });
   fastify.register(websocket);
