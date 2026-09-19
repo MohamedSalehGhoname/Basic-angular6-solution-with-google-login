@@ -3,6 +3,8 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ClipboardStore, TTL_OPTIONS, type ClipboardEntry } from '../../core/clipboard-store';
 import { DesktopCaptureService } from '../../core/desktop-capture.service';
+import { I18nService } from '../../core/i18n/i18n.service';
+import type { TranslationKey } from '../../core/i18n/translations';
 
 @Component({
   selector: 'app-clipboard',
@@ -13,8 +15,21 @@ import { DesktopCaptureService } from '../../core/desktop-capture.service';
 export class Clipboard {
   protected readonly store = inject(ClipboardStore);
   protected readonly desktop = inject(DesktopCaptureService);
+  protected readonly i18n = inject(I18nService);
 
   protected readonly ttlOptions = TTL_OPTIONS;
+
+  protected ttlLabel(ms: number | null): string {
+    const key: TranslationKey =
+      ms === null
+        ? 'ttl.forever'
+        : ms <= 3_600_000
+          ? 'ttl.1h'
+          : ms <= 86_400_000
+            ? 'ttl.1d'
+            : 'ttl.1w';
+    return this.i18n.t(key);
+  }
   protected draft = '';
   protected readonly loading = signal(true);
   protected readonly error = signal<string | null>(null);
@@ -98,7 +113,7 @@ export class Clipboard {
   }
 
   protected clear(): void {
-    if (!confirm('Delete all clipboard items? This cannot be undone.')) {
+    if (!confirm(this.i18n.t('clipboard.confirmClear'))) {
       return;
     }
     this.error.set(null);

@@ -1,24 +1,20 @@
 <form class="unlock-card" (ngSubmit)="submit()">
   @if (!ready()) {
-    <p class="hint">Checking for an existing vault…</p>
+    <p class="hint">{{ i18n.t('unlock.checking') }}</p>
   } @else if (usingRecovery()) {
-    <h1>Use a recovery code</h1>
-    <p>Enter the recovery code you saved when you set it up.</p>
+    <h1>{{ i18n.t('unlock.recovery.title') }}</h1>
+    <p>{{ i18n.t('unlock.recovery.intro') }}</p>
   } @else if (creating()) {
-    <h1>Create your vault</h1>
-    <p>
-      Choose a passphrase to encrypt your clipboard. It never leaves this
-      device. Set up a recovery code afterwards in Settings if you want a way
-      back in — otherwise a forgotten passphrase means the vault is lost.
-    </p>
+    <h1>{{ i18n.t('unlock.create.title') }}</h1>
+    <p>{{ i18n.t('unlock.create.intro') }}</p>
   } @else {
-    <h1>Unlock your vault</h1>
-    <p>Enter your passphrase to decrypt your clipboard on this device.</p>
+    <h1>{{ i18n.t('unlock.title') }}</h1>
+    <p>{{ i18n.t('unlock.intro') }}</p>
   }
 
   @if (ready() && usingRecovery()) {
     <label>
-      Recovery code
+      {{ i18n.t('unlock.recovery.label') }}
       <input
         type="text"
         name="recoveryCode"
@@ -32,7 +28,7 @@
     </label>
 
     <button type="submit" [disabled]="busy()">
-      {{ busy() ? 'Deriving keys…' : 'Unlock with code' }}
+      {{ busy() ? i18n.t('unlock.deriving') : i18n.t('unlock.unlockWithCode') }}
     </button>
 
     @if (error(); as message) {
@@ -40,11 +36,11 @@
     }
 
     <button type="button" class="link" (click)="toggleRecovery()">
-      Back to passphrase
+      {{ i18n.t('unlock.backToPassphrase') }}
     </button>
   } @else if (ready()) {
     <label>
-      Passphrase
+      {{ i18n.t('unlock.passphrase') }}
       <input
         type="password"
         name="passphrase"
@@ -57,7 +53,7 @@
 
     @if (creating()) {
       <label>
-        Confirm passphrase
+        {{ i18n.t('unlock.confirm') }}
         <input
           type="password"
           name="confirmation"
@@ -66,16 +62,16 @@
           [disabled]="busy()"
         />
       </label>
-      <p class="hint">At least {{ minLength }} characters. A short sentence works well.</p>
+      <p class="hint">{{ i18n.t('unlock.minHint', { n: minLength }) }}</p>
     }
 
     <button type="submit" [disabled]="busy()">
       @if (busy()) {
-        Deriving keys…
+        {{ i18n.t('unlock.deriving') }}
       } @else if (creating()) {
-        Create vault
+        {{ i18n.t('unlock.createBtn') }}
       } @else {
-        Unlock
+        {{ i18n.t('unlock.unlockBtn') }}
       }
     </button>
 
@@ -85,7 +81,7 @@
 
     @if (!creating()) {
       <button type="button" class="link" (click)="toggleRecovery()">
-        Forgot your passphrase? Use a recovery code
+        {{ i18n.t('unlock.forgot') }}
       </button>
     }
   }

@@ -1,6 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ClipboardCopyService } from '../../core/clipboard-copy.service';
+import { I18nService } from '../../core/i18n/i18n.service';
 import { DEFAULT_PASSWORD_OPTIONS, generatePassword } from '../../core/password-generator';
 import { SecretsStore, type SecretEntry, type SecretFields } from '../../core/secrets-store';
 
@@ -15,6 +16,7 @@ const EMPTY_FORM: SecretFields = { title: '', username: '', password: '', url: '
 export class Secrets {
   protected readonly store = inject(SecretsStore);
   protected readonly clipboard = inject(ClipboardCopyService);
+  protected readonly i18n = inject(I18nService);
 
   protected readonly loading = signal(true);
   protected readonly error = signal<string | null>(null);
@@ -102,7 +104,7 @@ export class Secrets {
   }
 
   protected async remove(entry: SecretEntry): Promise<void> {
-    if (!confirm(`Delete "${entry.title}"? This cannot be undone.`)) {
+    if (!confirm(this.i18n.t('secrets.deleteConfirm', { title: entry.title }))) {
       return;
     }
     this.error.set(null);
@@ -149,7 +151,10 @@ export class Secrets {
   protected async copyPassword(entry: SecretEntry): Promise<void> {
     this.error.set(null);
     try {
-      await this.clipboard.copyEphemeral(entry.password, `password for ${entry.title}`);
+      await this.clipboard.copyEphemeral(
+        entry.password,
+        `${this.i18n.t('secrets.field.password')} · ${entry.title}`,
+      );
     } catch {
       this.error.set('Could not copy to the clipboard.');
     }

@@ -1,18 +1,18 @@
 <div class="page-head">
-  <h1>Clipboard</h1>
+  <h1>{{ i18n.t('clipboard.title') }}</h1>
   <div class="head-actions">
     @if (desktop.available) {
-      <label class="capture-toggle" title="Automatically capture what you copy on this computer">
+      <label class="capture-toggle" [title]="i18n.t('clipboard.captureTitle')">
         <input
           type="checkbox"
           [checked]="desktop.enabled()"
           (change)="desktop.setEnabled($any($event.target).checked)"
         />
-        Capture copies
+        {{ i18n.t('clipboard.capture') }}
       </label>
     }
     @if (store.items().length > 0) {
-      <button type="button" class="ghost" (click)="clear()">Clear all</button>
+      <button type="button" class="ghost" (click)="clear()">{{ i18n.t('clipboard.clearAll') }}</button>
     }
   </div>
 </div>
@@ -22,23 +22,23 @@
     name="draft"
     [(ngModel)]="draft"
     rows="3"
-    placeholder="Type or paste something to keep it in your encrypted clipboard…"
+    [placeholder]="i18n.t('clipboard.placeholder')"
   ></textarea>
   <div class="composer-actions">
     <label class="ttl">
-      New items expire after
+      {{ i18n.t('clipboard.expireAfter') }}
       <select (change)="onTtlChange($any($event.target).value)">
         @for (option of ttlOptions; track option.label) {
           <option [value]="option.ms" [selected]="store.ttlMs() === option.ms">
-            {{ option.label }}
+            {{ ttlLabel(option.ms) }}
           </option>
         }
       </select>
     </label>
     <button type="button" class="ghost" (click)="pasteFromClipboard()">
-      Paste from clipboard
+      {{ i18n.t('clipboard.paste') }}
     </button>
-    <button type="submit" [disabled]="!draft.trim()">Add</button>
+    <button type="submit" [disabled]="!draft.trim()">{{ i18n.t('clipboard.add') }}</button>
   </div>
 </form>
 
@@ -47,36 +47,30 @@
 }
 
 @if (!loading() && !store.online()) {
-  <p class="muted">
-    Offline — changes stay on this device and sync when the server is reachable.
-  </p>
+  <p class="muted">{{ i18n.t('clipboard.offline') }}</p>
 }
 
 @if (loading()) {
-  <p class="muted">Decrypting your clipboard…</p>
+  <p class="muted">{{ i18n.t('clipboard.decrypting') }}</p>
 } @else if (store.items().length === 0) {
   <div class="empty-state">
-    <p>No clipboard items yet.</p>
-    <p class="hint">
-      Everything you add is encrypted on this device before it is stored.
-    </p>
+    <p>{{ i18n.t('clipboard.empty') }}</p>
+    <p class="hint">{{ i18n.t('clipboard.emptyHint') }}</p>
   </div>
 } @else {
   @if (store.skipped() > 0) {
-    <p class="muted">
-      {{ store.skipped() }} item(s) could not be decrypted and were skipped.
-    </p>
+    <p class="muted">{{ i18n.t('clipboard.skipped', { n: store.skipped() }) }}</p>
   }
   <input
     class="search"
     type="search"
     [ngModel]="search()"
     (ngModelChange)="search.set($event)"
-    placeholder="Search clipboard…"
-    aria-label="Search clipboard"
+    [placeholder]="i18n.t('clipboard.search')"
+    [attr.aria-label]="i18n.t('clipboard.search')"
   />
   @if (filtered().length === 0) {
-    <p class="muted">No items match “{{ search() }}”.</p>
+    <p class="muted">{{ i18n.t('clipboard.noMatch', { q: search() }) }}</p>
   }
   <ul class="items">
     @for (item of filtered(); track item.id) {
@@ -86,15 +80,17 @@
           <span class="meta">
             {{ item.device }} · {{ item.copiedAt | date: 'short' }}
             @if (item.expiresAt != null) {
-              · expires {{ item.expiresAt | date: 'short' }}
+              · {{ i18n.t('clipboard.expires', { d: (item.expiresAt | date: 'short') ?? '' }) }}
             }
           </span>
         </div>
         <div class="actions">
           <button type="button" (click)="copy(item)">
-            {{ copiedId() === item.id ? 'Copied!' : 'Copy' }}
+            {{ copiedId() === item.id ? i18n.t('clipboard.copied') : i18n.t('clipboard.copy') }}
           </button>
-          <button type="button" class="ghost" (click)="remove(item.id)">Delete</button>
+          <button type="button" class="ghost" (click)="remove(item.id)">
+            {{ i18n.t('clipboard.delete') }}
+          </button>
         </div>
       </li>
     }

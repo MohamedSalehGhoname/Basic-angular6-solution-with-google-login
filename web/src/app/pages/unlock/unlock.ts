@@ -1,6 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
+import { I18nService } from '../../core/i18n/i18n.service';
 import { VaultService } from '../../core/vault.service';
 
 const MIN_PASSPHRASE_LENGTH = 10;
@@ -13,6 +14,7 @@ const MIN_PASSPHRASE_LENGTH = 10;
 })
 export class Unlock {
   protected readonly vault = inject(VaultService);
+  protected readonly i18n = inject(I18nService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
@@ -50,11 +52,11 @@ export class Unlock {
 
     if (this.creating()) {
       if (this.passphrase.length < MIN_PASSPHRASE_LENGTH) {
-        this.error.set(`Use at least ${MIN_PASSPHRASE_LENGTH} characters.`);
+        this.error.set(this.i18n.t('unlock.tooShort', { n: MIN_PASSPHRASE_LENGTH }));
         return;
       }
       if (this.passphrase !== this.confirmation) {
-        this.error.set('Passphrases do not match.');
+        this.error.set(this.i18n.t('unlock.mismatch'));
         return;
       }
     }
@@ -73,7 +75,7 @@ export class Unlock {
       this.recoveryCode = '';
       await this.router.navigateByUrl(this.returnUrl());
     } catch (err) {
-      this.error.set(err instanceof Error ? err.message : 'Something went wrong.');
+      this.error.set(err instanceof Error ? err.message : this.i18n.t('unlock.generic'));
     } finally {
       this.busy.set(false);
     }

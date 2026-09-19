@@ -2,15 +2,15 @@
   <div class="left">
     <a routerLink="/" class="brand">
       <span class="brand-mark" aria-hidden="true">⧉</span>
-      Clipboard Sync
+      {{ i18n.t('app.name') }}
     </a>
     @if (vault.status() === 'unlocked') {
       <nav aria-label="Sections">
         <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">
-          Clipboard
+          {{ i18n.t('nav.clipboard') }}
         </a>
-        <a routerLink="/secrets" routerLinkActive="active">Secrets</a>
-        <a routerLink="/settings" routerLinkActive="active">Settings</a>
+        <a routerLink="/secrets" routerLinkActive="active">{{ i18n.t('nav.secrets') }}</a>
+        <a routerLink="/settings" routerLinkActive="active">{{ i18n.t('nav.settings') }}</a>
       </nav>
     }
   </div>
@@ -42,9 +42,9 @@
         }
         <span class="name">{{ user.displayName ?? user.email }}</span>
         @if (vault.status() === 'unlocked') {
-          <button type="button" class="btn-ghost" (click)="lockVault()">Lock</button>
+          <button type="button" class="btn-ghost" (click)="lockVault()">{{ i18n.t('header.lock') }}</button>
         }
-        <button type="button" class="btn-ghost" (click)="signOut()">Sign out</button>
+        <button type="button" class="btn-ghost" (click)="signOut()">{{ i18n.t('header.signOut') }}</button>
       </div>
     }
   </div>

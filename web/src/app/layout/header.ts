@@ -1,6 +1,7 @@
 import { Component, computed, inject } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../core/auth.service';
+import { I18nService } from '../core/i18n/i18n.service';
 import { ThemeService } from '../core/theme.service';
 import { VaultService } from '../core/vault.service';
 
@@ -14,6 +15,7 @@ export class Header {
   protected readonly auth = inject(AuthService);
   protected readonly vault = inject(VaultService);
   protected readonly theme = inject(ThemeService);
+  protected readonly i18n = inject(I18nService);
   private readonly router = inject(Router);
 
   protected readonly themeIcon = computed(() => {
