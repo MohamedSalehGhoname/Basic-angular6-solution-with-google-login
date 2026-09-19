@@ -9,6 +9,12 @@ import {
 } from '../../core/groups-store';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { fileToAttachment } from '../../core/image-utils';
+import {
+  type ImportResult,
+  type ParsedKeePass,
+  importKeePass,
+  parseKeePassXml,
+} from '../../core/keepass-import';
 import { DEFAULT_PASSWORD_OPTIONS, generatePassword } from '../../core/password-generator';
 import {
   type Attachment,
@@ -284,6 +290,48 @@ export class Secrets {
       await this.store.move(id, groupId);
     } catch (err) {
       this.error.set(err instanceof Error ? err.message : 'Could not move the password.');
+    }
+  }
+
+  // --- KeePass import ------------------------------------------------------
+
+  protected readonly importPreview = signal<ParsedKeePass | null>(null);
+  protected readonly importProgress = signal<{ done: number; total: number } | null>(null);
+  protected readonly importResult = signal<ImportResult | null>(null);
+
+  protected async onImportFile(input: HTMLInputElement): Promise<void> {
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) {
+      return;
+    }
+    this.error.set(null);
+    this.importResult.set(null);
+    try {
+      this.importPreview.set(parseKeePassXml(await file.text()));
+    } catch {
+      this.error.set(this.i18n.t('secrets.import.notKeePass'));
+    }
+  }
+
+  protected async runImport(): Promise<void> {
+    const parsed = this.importPreview();
+    if (!parsed || this.importProgress()) {
+      return;
+    }
+    this.error.set(null);
+    this.importProgress.set({ done: 0, total: parsed.entryCount + parsed.groupCount });
+    try {
+      const result = await importKeePass(parsed, this.groups, this.store, (done, total) =>
+        this.importProgress.set({ done, total }),
+      );
+      this.importResult.set(result);
+      this.importPreview.set(null);
+      this.selectGroup(null);
+    } catch (err) {
+      this.error.set(err instanceof Error ? err.message : 'The import stopped part-way.');
+    } finally {
+      this.importProgress.set(null);
     }
   }
 
