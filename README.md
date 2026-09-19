@@ -16,7 +16,28 @@ sign-in; the sync server, E2EE layer, and mobile clients come later.
 | `desktop/` | Electron desktop client with OS clipboard capture         |
 | `mobile/`  | Capacitor iOS/Android client (receive-first)              |
 
-## Web client setup
+## Try it locally in 2 minutes (no Firebase)
+
+Requires Node.js ≥ 22.22.3. This runs the whole app with a built-in local
+dev login, so you do not need a Firebase project to click around.
+
+1. In `web/src/app/sync.config.ts`, set `devAuth: true`.
+2. Start the sync server in dev-auth mode:
+   ```bash
+   cd server && npm install && INSECURE_DEV_AUTH=1 npm run dev
+   ```
+3. In another terminal, start the web app:
+   ```bash
+   cd web && npm install && npm start
+   ```
+4. Open <http://localhost:4200>, click **Sign in with Google** (it signs you in
+   as a local dev user), then create a vault passphrase. Everything — clipboard,
+   secrets, sync, settings — works. Open a second browser/tab to see live sync.
+
+Set `devAuth` back to `false` before using real Google sign-in. Never enable it
+in production: it grants access without real authentication.
+
+## Web client setup (real Google sign-in)
 
 Requires Node.js ≥ 22.22.3.
 
