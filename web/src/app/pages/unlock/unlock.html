@@ -39,6 +39,12 @@
       {{ i18n.t('unlock.backToPassphrase') }}
     </button>
   } @else if (ready()) {
+    @if (biometric.enabled() && !creating()) {
+      <button type="button" class="fingerprint" (click)="unlockWithFingerprint()" [disabled]="fingerprintBusy()">
+        <span aria-hidden="true">☝️</span> {{ i18n.t('biometric.unlockButton') }}
+      </button>
+      <p class="or">{{ i18n.t('biometric.orPassphrase') }}</p>
+    }
     <label>
       {{ i18n.t('unlock.passphrase') }}
       <input
@@ -74,6 +80,18 @@
       />
       {{ i18n.t('unlock.showPassphrase') }}
     </label>
+
+    @if (biometric.available() && !biometric.enabled() && !creating()) {
+      <label class="show-toggle">
+        <input
+          type="checkbox"
+          name="enableFingerprint"
+          [checked]="enableFingerprint()"
+          (change)="enableFingerprint.set($any($event.target).checked)"
+        />
+        {{ i18n.t('biometric.offer') }}
+      </label>
+    }
 
     <button type="submit" [disabled]="busy()">
       @if (busy()) {

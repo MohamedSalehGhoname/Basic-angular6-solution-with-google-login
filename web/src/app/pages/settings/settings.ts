@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { I18nService } from '../../core/i18n/i18n.service';
 import type { Locale } from '../../core/i18n/translations';
 import type { TranslationKey } from '../../core/i18n/translations';
+import { BiometricUnlockService } from '../../core/biometric-unlock.service';
 import { DesktopCaptureService } from '../../core/desktop-capture.service';
 import { FileShareService } from '../../core/file-share.service';
 import { ThemeService, type ThemePreference } from '../../core/theme.service';
@@ -20,6 +21,29 @@ export class Settings {
   protected readonly i18n = inject(I18nService);
   protected readonly files = inject(FileShareService);
   protected readonly capture = inject(DesktopCaptureService);
+  protected readonly biometric = inject(BiometricUnlockService);
+  protected readonly biometricBusy = signal(false);
+  protected readonly biometricError = signal<string | null>(null);
+
+  constructor() {
+    void this.biometric.refreshStatus();
+  }
+
+  protected async toggleBiometric(on: boolean): Promise<void> {
+    this.biometricError.set(null);
+    this.biometricBusy.set(true);
+    try {
+      if (on) {
+        await this.biometric.enable();
+      } else {
+        await this.biometric.disable();
+      }
+    } catch {
+      this.biometricError.set(this.i18n.t('biometric.enableFailed'));
+    } finally {
+      this.biometricBusy.set(false);
+    }
+  }
 
   protected readonly themeOptions: { value: ThemePreference; labelKey: TranslationKey }[] = [
     { value: 'system', labelKey: 'settings.theme.system' },

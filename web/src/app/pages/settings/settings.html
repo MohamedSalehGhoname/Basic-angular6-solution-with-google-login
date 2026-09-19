@@ -20,6 +20,25 @@
   </label>
 </section>
 
+@if (biometric.available()) {
+  <section class="card">
+    <h2>{{ i18n.t('biometric.title') }}</h2>
+    <label class="check">
+      <input
+        type="checkbox"
+        [checked]="biometric.enabled()"
+        [disabled]="biometricBusy()"
+        (change)="toggleBiometric($any($event.target).checked)"
+      />
+      {{ i18n.t('biometric.setting') }}
+    </label>
+    <p class="muted">{{ i18n.t('biometric.hint') }}</p>
+    @if (biometricError(); as message) {
+      <p class="error" role="alert">{{ message }}</p>
+    }
+  </section>
+}
+
 @if (capture.available) {
   <section class="card">
     <h2>{{ i18n.t('settings.capture') }}</h2>

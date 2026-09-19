@@ -183,6 +183,37 @@ export class VaultService {
     await this.pushMetadata(uid, updated);
   }
 
+  /** The unlocked vault key (base64), to seal on this device for fingerprint unlock. */
+  async exportVaultKey(): Promise<string> {
+    return this.crypto.toBase64(this.requireVaultKey());
+  }
+
+  /** A small blob only the current vault key opens; lets a sealed key be checked later. */
+  async keyCheck(): Promise<string> {
+    return this.encryptItem(KEY_CHECK_TEXT);
+  }
+
+  /**
+   * Unlocks with a vault key released by the device (fingerprint unlock),
+   * after checking it against the blob from keyCheck(): a stale key (e.g. the
+   * vault was recreated) is refused instead of silently failing every item.
+   */
+  async unlockWithVaultKey(keyBase64: string, check: string): Promise<void> {
+    const uid = this.requireUid();
+    const key = await this.crypto.fromBase64(keyBase64);
+    let ok = false;
+    try {
+      ok = (await this.crypto.decryptItem(check, key)) === KEY_CHECK_TEXT;
+    } catch {
+      ok = false;
+    }
+    if (!ok) {
+      await this.crypto.zeroize(key);
+      throw new Error('stale-key');
+    }
+    this.setUnlocked(uid, key);
+  }
+
   lock(): void {
     if (this.vaultKey) {
       // Fire-and-forget: zeroize only awaits the already-resolved sodium.ready.
@@ -297,6 +328,8 @@ export class VaultService {
     this.metadataVersion.update((version) => version + 1);
   }
 }
+
+const KEY_CHECK_TEXT = 'clipsync-vault-key-check-v1';
 
 /** Human-friendly recovery code: 5 groups of 5 unambiguous characters. */
 function generateRecoveryCode(): string {
