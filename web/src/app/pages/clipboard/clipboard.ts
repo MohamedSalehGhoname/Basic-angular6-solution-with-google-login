@@ -2,6 +2,7 @@ import { DatePipe } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ClipboardStore, TTL_OPTIONS, type ClipboardEntry } from '../../core/clipboard-store';
+import { DesktopCaptureService } from '../../core/desktop-capture.service';
 
 @Component({
   selector: 'app-clipboard',
@@ -11,6 +12,7 @@ import { ClipboardStore, TTL_OPTIONS, type ClipboardEntry } from '../../core/cli
 })
 export class Clipboard {
   protected readonly store = inject(ClipboardStore);
+  protected readonly desktop = inject(DesktopCaptureService);
 
   protected readonly ttlOptions = TTL_OPTIONS;
   protected draft = '';

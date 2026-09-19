@@ -1,8 +1,20 @@
 <div class="page-head">
   <h1>Clipboard</h1>
-  @if (store.items().length > 0) {
-    <button type="button" class="ghost" (click)="clear()">Clear all</button>
-  }
+  <div class="head-actions">
+    @if (desktop.available) {
+      <label class="capture-toggle" title="Automatically capture what you copy on this computer">
+        <input
+          type="checkbox"
+          [checked]="desktop.enabled()"
+          (change)="desktop.setEnabled($any($event.target).checked)"
+        />
+        Capture copies
+      </label>
+    }
+    @if (store.items().length > 0) {
+      <button type="button" class="ghost" (click)="clear()">Clear all</button>
+    }
+  </div>
 </div>
 
 <form class="composer" (ngSubmit)="add()">

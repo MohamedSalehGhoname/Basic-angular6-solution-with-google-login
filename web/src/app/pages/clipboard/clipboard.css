@@ -8,6 +8,21 @@
   font-size: 1.25rem;
 }
 
+.head-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.capture-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: #555;
+  cursor: pointer;
+}
+
 .composer {
   display: flex;
   flex-direction: column;

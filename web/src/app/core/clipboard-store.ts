@@ -37,15 +37,20 @@ export class ClipboardStore extends SyncedCollection<ClipboardPayload> {
     setInterval(() => this.sweepExpired(), SWEEP_INTERVAL_MS);
   }
 
-  async add(text: string): Promise<ClipboardEntry | null> {
+  async add(text: string, options: { device?: string } = {}): Promise<ClipboardEntry | null> {
     if (!text.trim()) {
+      return null;
+    }
+    // Skip if this exact text is already the newest item (e.g. desktop capture
+    // of something just added here), so a copy is not duplicated.
+    if (this.items()[0]?.text === text) {
       return null;
     }
     const ttl = this._ttlMs();
     const now = Date.now();
     return this.create({
       text,
-      device: 'Web',
+      device: options.device ?? 'Web',
       copiedAt: now,
       expiresAt: ttl === null ? null : now + ttl,
     });

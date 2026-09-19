@@ -9,10 +9,11 @@ sign-in; the sync server, E2EE layer, and mobile clients come later.
 
 ## Repository layout
 
-| Path      | Contents                                                 |
-| --------- | -------------------------------------------------------- |
-| `web/`    | Angular web client (latest Angular, standalone, signals) |
-| `server/` | Zero-knowledge sync server (Fastify + SQLite + WebSocket) |
+| Path       | Contents                                                  |
+| ---------- | --------------------------------------------------------- |
+| `web/`     | Angular web client (latest Angular, standalone, signals)  |
+| `server/`  | Zero-knowledge sync server (Fastify + SQLite + WebSocket) |
+| `desktop/` | Electron desktop client with OS clipboard capture         |
 
 ## Web client setup
 
@@ -85,6 +86,37 @@ changes are pushed on the next online load, and remote changes stream in over
 the WebSocket. A brand-new device only needs the Google login and the
 passphrase — it pulls the vault record from the server and unlocks.
 
+## Desktop client
+
+The Electron app in `desktop/` loads the same web client and adds a
+main-process **clipboard watcher**. Captured text is handed to the renderer
+over a context-isolated bridge and stored through the ordinary (encrypted,
+synced) clipboard path — the vault key never leaves the renderer, so the
+desktop shell adds no new crypto. Turn capture on with the "Capture copies"
+toggle on the clipboard page (off by default).
+
+The capture policy (`desktop/src/policy.ts`, fully unit-tested) skips:
+
+- unchanged and empty clipboard values;
+- values the OS/password managers mark private
+  (`ExcludeClipboardContentFromMonitorProcessing` and
+  `CanIncludeInClipboardHistory` on Windows, `org.nspasteboard.ConcealedType`
+  on macOS);
+- values that look like secrets (TOTP codes, high-entropy tokens, known key
+  prefixes, private-key blocks) — unless secret capture is explicitly enabled.
+
+```bash
+cd desktop
+npm install
+npm test
+# Run the shell (needs the web app running or built):
+CLIPSYNC_WEB_URL=http://localhost:4200 npm start
+```
+
+Runtime note: the capture decision logic and the renderer bridge are covered
+by unit tests, but launching the Electron GUI requires a desktop session and
+is not exercised in CI. Packaging (electron-builder) is not set up yet.
+
 ## Architecture direction
 
 - **Two vaults, different policies**: an auto-captured clipboard vault with
@@ -97,8 +129,8 @@ passphrase — it pulls the vault record from the server and unlocks.
   the sync layer that uses it come next.
 - **Auth ≠ encryption**: Google login authenticates the account; it can never
   derive the decryption keys.
-- **Capture model**: desktop clients/extension auto-capture; mobile apps are
-  receive-first (OS restrictions block background clipboard reads).
+- **Capture model**: the desktop client auto-captures (see above); mobile apps
+  are receive-first (OS restrictions block background clipboard reads).
 
 ## History
 

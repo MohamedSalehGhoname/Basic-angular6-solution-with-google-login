@@ -1,0 +1,19 @@
+{
+  "name": "clipsync-desktop",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Desktop client for Clipboard Sync: watches the OS clipboard and captures items into the encrypted vault.",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "npm run build && electron .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "electron": "^44.4.3",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.1"
+  }
+}
