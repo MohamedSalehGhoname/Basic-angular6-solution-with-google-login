@@ -116,7 +116,7 @@ export const TRANSLATIONS = {
     'settings.appearance': 'Appearance',
     'settings.files': 'Sending files',
     'settings.filesIntro':
-      'Right-click any file in Explorer and choose “Send to Clipboard Sync” to make it available on all your devices. Files are kept for 7 days.',
+      'On a computer, right-click any file and choose Send to ▸ Clipboard Sync; on a phone, share it to Clipboard Sync from any app. It becomes available on all your devices. Files are kept for 7 days.',
     'settings.filesEncrypt': 'Encrypt files before sending (slower)',
     'settings.filesEncryptHint':
       'Only your devices can open them. Turn off to send files as-is, which is faster but lets the storage service see them.',
@@ -265,7 +265,7 @@ export const TRANSLATIONS = {
     'settings.appearance': 'المظهر',
     'settings.files': 'إرسال الملفات',
     'settings.filesIntro':
-      'اضغط بالزر الأيمن على أي ملف في المستكشف واختر “Send to Clipboard Sync” ليصبح متاحًا على كل أجهزتك. تُحفظ الملفات 7 أيام.',
+      'على الكمبيوتر، اضغط بالزر الأيمن على أي ملف واختر Send to ▸ Clipboard Sync، وعلى الموبايل شاركه إلى Clipboard Sync من أي تطبيق. يصبح متاحًا على كل أجهزتك. تُحفظ الملفات 7 أيام.',
     'settings.filesEncrypt': 'تشفير الملفات قبل الإرسال (أبطأ)',
     'settings.filesEncryptHint':
       'لا يفتحها إلا أجهزتك. أوقفه لإرسال الملفات كما هي، وهذا أسرع لكن خدمة التخزين تستطيع رؤيتها.',

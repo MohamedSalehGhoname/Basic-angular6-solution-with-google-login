@@ -68,6 +68,7 @@ describe('FileShareService', () => {
     fileContent: ReturnType<typeof vi.fn>;
   };
   let addFile: ReturnType<typeof vi.fn>;
+  let addText: ReturnType<typeof vi.fn>;
   let native: { canSaveFile: boolean; saveFile: ReturnType<typeof vi.fn> };
 
   const inject = () => {
@@ -75,7 +76,7 @@ describe('FileShareService', () => {
       providers: [
         { provide: AuthService, useValue: { user } },
         { provide: VaultService, useValue: { status } },
-        { provide: ClipboardStore, useValue: { addFile } },
+        { provide: ClipboardStore, useValue: { addFile, add: addText } },
         { provide: SyncApi, useValue: api },
         { provide: NativeBridge, useValue: native },
       ],
@@ -106,6 +107,7 @@ describe('FileShareService', () => {
       fileContent: vi.fn(async () => fromBase64(VECTOR)),
     };
     addFile = vi.fn(async () => null);
+    addText = vi.fn(async () => null);
     native = { canSaveFile: false, saveFile: vi.fn(async () => undefined) };
   });
 
@@ -278,5 +280,119 @@ describe('FileShareService', () => {
     await service.download({ id: 'fil_1', name: 'big.iso', size: 200 * 1024 * 1024 });
     expect(api.fileContent).not.toHaveBeenCalled();
     expect(service.transfers()[0]!.error).toBe('files.error.tooLargePhone');
+  });
+
+  describe('phone share sheet', () => {
+    type Item =
+      | { kind: 'text'; text: string }
+      | { kind: 'file'; requestId: string; name: string; sizeBytes: number };
+    let listeners: Record<string, (value: never) => void>;
+    let receiver: {
+      pending: Item[];
+      uploads: unknown[];
+      forgotten: unknown[];
+      takePending: () => Promise<{ items: Item[] }>;
+      upload: (options: unknown) => Promise<void>;
+      forget: (options: unknown) => Promise<void>;
+      addListener: (event: string, cb: (value: never) => void) => Promise<unknown>;
+    };
+    const share = (item: Item) => listeners['share']!(item as never);
+
+    beforeEach(() => {
+      delete (window as unknown as { clipsyncDesktop?: unknown }).clipsyncDesktop;
+      listeners = {};
+      receiver = {
+        pending: [],
+        uploads: [],
+        forgotten: [],
+        takePending: async () => ({ items: receiver.pending.splice(0) }),
+        upload: async (options) => {
+          receiver.uploads.push(options);
+        },
+        forget: async (options) => {
+          receiver.forgotten.push(options);
+        },
+        addListener: async (event, cb) => {
+          listeners[event] = cb;
+          return {};
+        },
+      };
+      (window as unknown as { Capacitor?: unknown }).Capacitor = {
+        Plugins: { ShareReceiver: receiver },
+      };
+    });
+
+    afterEach(() => {
+      delete (window as unknown as { Capacitor?: unknown }).Capacitor;
+    });
+
+    it('can send from the phone', () => {
+      expect(inject().canSend).toBe(true);
+    });
+
+    it('adds shared text as a clipboard item from the phone', async () => {
+      inject();
+      await flush();
+      share({ kind: 'text', text: 'https://example.com/article' });
+      await flush();
+      expect(addText).toHaveBeenCalledWith('https://example.com/article', { device: 'Phone' });
+    });
+
+    it('uploads a shared file natively, encrypted by default', async () => {
+      inject();
+      await flush();
+      share({ kind: 'file', requestId: 'r1', name: 'photo.jpg', sizeBytes: 2000 });
+      await flush();
+      expect(api.createFile).toHaveBeenCalledWith({
+        sizeBytes: encryptedSize(2000),
+        encrypted: true,
+        name: undefined,
+      });
+      const upload = receiver.uploads[0] as { requestId: string; key: string };
+      expect(upload.requestId).toBe('r1');
+      expect(fromBase64(upload.key)).toHaveLength(32);
+      expect(addFile).toHaveBeenCalledWith(
+        { id: 'fil_1', name: 'photo.jpg', size: 2000, key: upload.key },
+        { device: 'Phone' },
+      );
+    });
+
+    it('drains shares that arrived before the app was ready', async () => {
+      receiver.pending = [
+        { kind: 'text', text: 'early text' },
+        { kind: 'file', requestId: 'r0', name: 'early.pdf', sizeBytes: 10 },
+      ];
+      inject();
+      await flush();
+      await flush();
+      expect(addText).toHaveBeenCalledWith('early text', { device: 'Phone' });
+      expect(addFile).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps shares until the vault is unlocked', async () => {
+      status.set('locked');
+      inject();
+      await flush();
+      share({ kind: 'text', text: 'later' });
+      share({ kind: 'file', requestId: 'r2', name: 'a.zip', sizeBytes: 5 });
+      await flush();
+      expect(addText).not.toHaveBeenCalled();
+      expect(api.createFile).not.toHaveBeenCalled();
+
+      status.set('unlocked');
+      TestBed.tick();
+      await flush();
+      expect(addText).toHaveBeenCalledWith('later', { device: 'Phone' });
+      expect(addFile).toHaveBeenCalledTimes(1);
+    });
+
+    it('tells the phone to drop a file whose upload failed', async () => {
+      api.createFile.mockRejectedValue(new FileRequestError(502));
+      inject();
+      await flush();
+      share({ kind: 'file', requestId: 'r3', name: 'x.bin', sizeBytes: 5 });
+      await flush();
+      expect(receiver.forgotten).toEqual([{ requestId: 'r3' }]);
+    });
   });
 });

@@ -20,7 +20,8 @@
     "@capacitor/filesystem": "^7.1.8",
     "@capacitor/ios": "^7.0.0",
     "@capacitor/share": "^7.0.0",
-    "@capacitor/status-bar": "^7.0.0"
+    "@capacitor/status-bar": "^7.0.0",
+    "capacitor-share-receiver": "file:plugins/share-receiver"
   },
   "devDependencies": {
     "@capacitor/cli": "^7.0.0"

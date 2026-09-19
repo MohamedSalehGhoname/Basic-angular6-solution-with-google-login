@@ -3,6 +3,7 @@ import { AuthService } from './auth.service';
 import { ClipboardStore, type ClipboardFile } from './clipboard-store';
 import type { FileSendRequest } from './desktop-capture.service';
 import { decryptFile, encryptedSize, fromBase64, newFileKey } from './file-crypto';
+import { desktopSender, mobileSender } from './file-senders';
 import { I18nService } from './i18n/i18n.service';
 import { NativeBridge } from './native-bridge.service';
 import type { TranslationKey } from './i18n/translations';
@@ -30,9 +31,9 @@ const PHONE_FILE_LIMIT = 150 * 1024 * 1024;
 const FAILED_VISIBLE_MS = 8000;
 
 /**
- * Files sent to the clipboard. The desktop app's Explorer menu hands us a
- * file (name + size only); we get a storage URL from the sync server, the
- * desktop streams the file there — encrypted with a fresh per-file key
+ * Files sent to the clipboard. The desktop app's Explorer menu, or the
+ * phone's share sheet, hands us a file (name + size only); we get a storage
+ * URL from the sync server, the native shell streams the file there — encrypted with a fresh per-file key
  * unless the user chose to send files as-is — and the file then becomes an
  * ordinary (encrypted, synced) clipboard item that carries the key. Every
  * signed-in device can download it; storage never sees the key.
@@ -47,8 +48,9 @@ export class FileShareService {
   private readonly native = inject(NativeBridge);
 
   private readonly desktop = window.clipsyncDesktop;
-  /** Whether this app can send files (the desktop app with the Explorer menu). */
-  readonly canSend = !!this.desktop?.onFileSend;
+  private readonly sender = desktopSender() ?? mobileSender();
+  /** Whether this app can send files (desktop "Send to", or the phone's share sheet). */
+  readonly canSend = !!this.sender;
 
   private readonly _encrypt = signal(this.readEncrypt());
   /** Encrypt files before upload (slower, zero-knowledge) or send as-is (faster). */
@@ -57,23 +59,34 @@ export class FileShareService {
   private readonly _transfers = signal<FileTransfer[]>([]);
   readonly transfers = this._transfers.asReadonly();
 
-  /** Sends that arrived while the vault was locked. */
+  /** Sends (and shared text) that arrived while the vault was locked. */
   private waiting: FileSendRequest[] = [];
+  private waitingTexts: string[] = [];
 
   constructor() {
-    if (!this.desktop?.onFileSend) {
+    if (!this.sender) {
       return;
     }
-    this.desktop.onFileProgress?.((progress) =>
-      this.patch(progress.id, { done: progress.done, total: progress.total }),
-    );
-    void this.desktop.onFileSend((request) => this.receive(request));
+    this.sender.start({
+      file: (request) => this.receive(request),
+      text: (text) => this.receiveText(text),
+      progress: (progress) =>
+        this.patch(progress.id, { done: progress.done, total: progress.total }),
+    });
 
     effect(() => {
-      if (this.vault.status() === 'unlocked' && this.auth.user() && this.waiting.length > 0) {
+      if (this.vault.status() !== 'unlocked' || !this.auth.user()) {
+        return;
+      }
+      if (this.waiting.length > 0) {
         const pending = this.waiting;
         this.waiting = [];
         pending.forEach((request) => void this.send(request));
+      }
+      if (this.waitingTexts.length > 0) {
+        const texts = this.waitingTexts;
+        this.waitingTexts = [];
+        texts.forEach((text) => void this.addText(text));
       }
     });
   }
@@ -102,12 +115,29 @@ export class FileShareService {
       total: request.sizeBytes,
       waiting: true,
     });
-    this.desktop?.showWindow?.();
+    this.sender?.reveal?.();
+  }
+
+  /** Text shared from another app (phone) becomes an ordinary clipboard item. */
+  private receiveText(text: string): void {
+    if (this.vault.status() === 'unlocked' && this.auth.user()) {
+      void this.addText(text);
+    } else {
+      this.waitingTexts.push(text);
+    }
+  }
+
+  private async addText(text: string): Promise<void> {
+    try {
+      await this.clipboard.add(text, { device: this.sender?.device ?? 'Web' });
+    } catch {
+      // Stays shareable again from the source app.
+    }
   }
 
   private async send(request: FileSendRequest): Promise<void> {
-    const desktop = this.desktop;
-    if (!desktop?.uploadFile) {
+    const sender = this.sender;
+    if (!sender) {
       return;
     }
     const encrypt = this._encrypt();
@@ -124,17 +154,17 @@ export class FileShareService {
         encrypted: encrypt,
         name: encrypt ? undefined : request.name,
       });
-      await desktop.uploadFile(request.requestId, created.uploadUrl, key);
+      await sender.upload(request.requestId, created.uploadUrl, key);
       await this.api.confirmFile(created.fileId);
       const file: ClipboardFile = { id: created.fileId, name: request.name, size: request.sizeBytes };
       if (key) {
         file.key = key;
       }
-      await this.clipboard.addFile(file, { device: 'Desktop' });
+      await this.clipboard.addFile(file, { device: sender.device });
       this.untrack(request.requestId);
       notify(this.i18n.t('files.sent', { name: request.name }));
     } catch (err) {
-      desktop.forgetFile?.(request.requestId);
+      sender.forget(request.requestId);
       this.fail(request.requestId, describe(err));
     }
   }
