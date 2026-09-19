@@ -7,12 +7,34 @@
   "scripts": {
     "build": "tsc",
     "start": "npm run build && electron .",
+    "bundle:web": "node scripts/bundle-web.mjs",
+    "dist": "npm run build && npm run bundle:web && electron-builder",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
+  },
+  "build": {
+    "appId": "com.clipsync.desktop",
+    "productName": "Clipboard Sync",
+    "files": ["dist/**/*", "assets/**/*", "web/**/*", "package.json"],
+    "directories": {
+      "output": "release"
+    },
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": ["dmg", "zip"]
+    },
+    "win": {
+      "target": ["nsis"]
+    },
+    "linux": {
+      "target": ["AppImage"],
+      "category": "Utility"
+    }
   },
   "devDependencies": {
     "@types/node": "^26.6.2",
     "electron": "^44.4.3",
+    "electron-builder": "^25.1.8",
     "typescript": "^7.0.2",
     "vitest": "^5.0.1"
   }

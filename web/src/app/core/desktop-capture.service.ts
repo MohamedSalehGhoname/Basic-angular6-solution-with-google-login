@@ -12,6 +12,7 @@ interface CapturedPayload {
 interface ClipsyncDesktopApi {
   isDesktop: true;
   onCaptured(callback: (payload: CapturedPayload) => void): () => void;
+  onToggleCaptureRequested?(callback: () => void): () => void;
   setCaptureEnabled(enabled: boolean): void;
   setCaptureSecrets(enabled: boolean): void;
 }
@@ -53,6 +54,8 @@ export class DesktopCaptureService {
     this.desktop.setCaptureEnabled(this._enabled());
 
     this.desktop.onCaptured((payload) => void this.handleCapture(payload));
+    // The tray menu can ask to toggle capture; keep our state authoritative.
+    this.desktop.onToggleCaptureRequested?.(() => this.setEnabled(!this._enabled()));
 
     // Flush anything captured while locked, once the vault is unlocked again.
     effect(() => {

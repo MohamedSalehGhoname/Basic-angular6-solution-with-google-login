@@ -45,11 +45,16 @@ Two vaults share the one encryption key, reachable from the header once
 unlocked:
 
 - **Clipboard** (`/`): free-text items with a per-item TTL (1 hour / 1 day /
-  1 week / forever), copy, paste-from-clipboard, and delete.
+  1 week / forever), search, copy, paste-from-clipboard, and delete.
 - **Secrets** (`/secrets`): KeePass-style structured entries (title, username,
-  password, URL, notes) that are editable and never expire. Copying a password
-  auto-clears it from the OS clipboard after 12 seconds (a plain username copy
-  does not), matching KeePass.
+  password, URL, notes) that are editable, searchable, and never expire, with
+  a built-in strong-password generator. Copying a password auto-clears it from
+  the OS clipboard after 12 seconds (a plain username copy does not), matching
+  KeePass.
+- **Settings** (`/settings`): light/dark/system theme, English/Arabic language
+  (the UI mirrors to RTL in Arabic), passphrase change (re-wraps the vault key;
+  items are not re-encrypted), and a recovery code — a second way to unlock if
+  the passphrase is forgotten, shown once and stored only as a wrapped key.
 
 ## Sync server
 
@@ -105,17 +110,27 @@ The capture policy (`desktop/src/policy.ts`, fully unit-tested) skips:
 - values that look like secrets (TOTP codes, high-entropy tokens, known key
   prefixes, private-key blocks) — unless secret capture is explicitly enabled.
 
+It runs in the background from a system-tray icon (open the window, toggle
+capture, toggle launch-at-login, or quit), keeps running when the window is
+closed so capture continues, and is single-instance.
+
 ```bash
 cd desktop
 npm install
 npm test
-# Run the shell (needs the web app running or built):
+# Run the shell against the dev web server:
 CLIPSYNC_WEB_URL=http://localhost:4200 npm start
+# Build a self-contained, installable app (bundles the built web client):
+npm run dist        # → release/ (electron-builder; mac dmg/zip, win nsis, linux AppImage)
 ```
 
+`npm run dist` first builds the web client and copies it in (`bundle:web`), so
+the packaged app has no external dependency. `CLIPSYNC_WEB_URL` overrides the
+bundled web app during development.
+
 Runtime note: the capture decision logic and the renderer bridge are covered
-by unit tests, but launching the Electron GUI requires a desktop session and
-is not exercised in CI. Packaging (electron-builder) is not set up yet.
+by unit tests, but launching the Electron GUI and producing installers require
+a desktop session with platform build tools and are not exercised in CI.
 
 ## Architecture direction
 
