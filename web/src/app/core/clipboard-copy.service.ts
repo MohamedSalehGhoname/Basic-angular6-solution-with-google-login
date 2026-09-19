@@ -1,4 +1,5 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
+import { NativeBridge } from './native-bridge.service';
 
 const DEFAULT_CLEAR_SECONDS = 12;
 
@@ -6,10 +7,13 @@ const DEFAULT_CLEAR_SECONDS = 12;
  * Copies a value to the OS clipboard and, KeePass-style, clears it again after
  * a short delay so a copied password does not linger. The clear only wipes the
  * clipboard if it still holds the copied value (best-effort — if the browser
- * denies reading it back, it clears anyway, matching KeePass).
+ * denies reading it back, it clears anyway, matching KeePass). Uses the native
+ * clipboard on mobile via NativeBridge.
  */
 @Injectable({ providedIn: 'root' })
 export class ClipboardCopyService {
+  private readonly native = inject(NativeBridge);
+
   private readonly _secondsLeft = signal(0);
   /** Seconds until the clipboard is wiped; 0 when idle. */
   readonly secondsLeft = this._secondsLeft.asReadonly();
@@ -23,7 +27,7 @@ export class ClipboardCopyService {
 
   /** Copies without auto-clear (for non-sensitive fields like a username). */
   async copy(text: string): Promise<void> {
-    await navigator.clipboard.writeText(text);
+    await this.native.copy(text);
   }
 
   /** Copies and schedules an auto-clear after `seconds`. */
@@ -32,7 +36,7 @@ export class ClipboardCopyService {
     label: string,
     seconds = DEFAULT_CLEAR_SECONDS,
   ): Promise<void> {
-    await navigator.clipboard.writeText(text);
+    await this.native.copy(text);
     this.lastCopied = text;
     this._activeLabel.set(label);
     this._secondsLeft.set(seconds);
@@ -65,7 +69,7 @@ export class ClipboardCopyService {
       return;
     }
     try {
-      const current = await navigator.clipboard.readText();
+      const current = await this.native.readText();
       if (current !== copied) {
         return; // The user copied something else; leave it alone.
       }
@@ -73,7 +77,7 @@ export class ClipboardCopyService {
       // Read denied — clear anyway, as KeePass does.
     }
     try {
-      await navigator.clipboard.writeText('');
+      await this.native.copy('');
     } catch {
       // Nothing more we can do if writing is denied.
     }

@@ -5,6 +5,7 @@ import { ClipboardStore, TTL_OPTIONS, type ClipboardEntry } from '../../core/cli
 import { DesktopCaptureService } from '../../core/desktop-capture.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import type { TranslationKey } from '../../core/i18n/translations';
+import { NativeBridge } from '../../core/native-bridge.service';
 
 @Component({
   selector: 'app-clipboard',
@@ -16,6 +17,7 @@ export class Clipboard {
   protected readonly store = inject(ClipboardStore);
   protected readonly desktop = inject(DesktopCaptureService);
   protected readonly i18n = inject(I18nService);
+  protected readonly native = inject(NativeBridge);
 
   protected readonly ttlOptions = TTL_OPTIONS;
 
@@ -75,7 +77,7 @@ export class Clipboard {
   protected async pasteFromClipboard(): Promise<void> {
     this.error.set(null);
     try {
-      const text = await navigator.clipboard.readText();
+      const text = await this.native.readText();
       if (text.trim()) {
         await this.store.add(text);
       }
@@ -87,7 +89,7 @@ export class Clipboard {
   protected async copy(entry: ClipboardEntry): Promise<void> {
     this.error.set(null);
     try {
-      await navigator.clipboard.writeText(entry.text);
+      await this.native.copy(entry.text);
       this.copiedId.set(entry.id);
       setTimeout(() => {
         if (this.copiedId() === entry.id) {
@@ -96,6 +98,15 @@ export class Clipboard {
       }, 1500);
     } catch {
       this.error.set('Could not write to your clipboard.');
+    }
+  }
+
+  protected async share(entry: ClipboardEntry): Promise<void> {
+    this.error.set(null);
+    try {
+      await this.native.share(entry.text);
+    } catch {
+      // User dismissed the share sheet, or sharing is unavailable.
     }
   }
 

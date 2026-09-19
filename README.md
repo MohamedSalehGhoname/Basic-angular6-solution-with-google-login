@@ -14,6 +14,7 @@ sign-in; the sync server, E2EE layer, and mobile clients come later.
 | `web/`     | Angular web client (latest Angular, standalone, signals)  |
 | `server/`  | Zero-knowledge sync server (Fastify + SQLite + WebSocket) |
 | `desktop/` | Electron desktop client with OS clipboard capture         |
+| `mobile/`  | Capacitor iOS/Android client (receive-first)              |
 
 ## Web client setup
 
@@ -131,6 +132,35 @@ bundled web app during development.
 Runtime note: the capture decision logic and the renderer bridge are covered
 by unit tests, but launching the Electron GUI and producing installers require
 a desktop session with platform build tools and are not exercised in CI.
+
+## Mobile client
+
+The `mobile/` package wraps the same web client as a native iOS/Android app
+with [Capacitor](https://capacitorjs.com/). It is **receive-first**: mobile
+OSes block background clipboard capture, so the app shows your synced clipboard
+and secrets, copies with one tap, and lets you send with the native share
+sheet — the desktop app does the auto-capturing.
+
+The web app is platform-aware through `web/src/app/core/native-bridge.service.ts`:
+copy/read/share use the native Capacitor plugins when present and fall back to
+the browser APIs otherwise, and Google sign-in uses a redirect (not a popup)
+inside the mobile WebView.
+
+```bash
+cd mobile
+npm install
+npm run sync          # builds the web client into www/ and runs `cap sync`
+npm run add:android   # or add:ios — generate the native project
+npm run open:android  # open in Android Studio / Xcode to run on a device
+```
+
+Before shipping on a device you must, outside this repo: point
+`web/src/app/sync.config.ts` at your deployed sync server (a phone's
+`localhost` is the phone itself), and register the app's bundle/package id and
+OAuth client with your Firebase project so Google sign-in works. Building and
+running on a device needs Android Studio / Xcode and is not exercised in CI;
+the `cap` config, the web bundling, and native-project generation with all
+plugins were verified here.
 
 ## Architecture direction
 

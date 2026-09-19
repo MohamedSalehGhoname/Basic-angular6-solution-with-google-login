@@ -1,0 +1,27 @@
+{
+  "name": "clipsync-mobile",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Mobile client for Clipboard Sync (Capacitor): receive-first view of the encrypted vault on iOS and Android.",
+  "type": "module",
+  "scripts": {
+    "bundle:web": "node scripts/bundle-web.mjs",
+    "sync": "npm run bundle:web && cap sync",
+    "add:android": "cap add android",
+    "add:ios": "cap add ios",
+    "open:android": "cap open android",
+    "open:ios": "cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/app": "^7.0.0",
+    "@capacitor/clipboard": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/ios": "^7.0.0",
+    "@capacitor/share": "^7.0.0",
+    "@capacitor/status-bar": "^7.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.0"
+  }
+}

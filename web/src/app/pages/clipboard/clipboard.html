@@ -88,6 +88,11 @@
           <button type="button" (click)="copy(item)">
             {{ copiedId() === item.id ? i18n.t('clipboard.copied') : i18n.t('clipboard.copy') }}
           </button>
+          @if (native.canShare) {
+            <button type="button" class="ghost" (click)="share(item)">
+              {{ i18n.t('clipboard.share') }}
+            </button>
+          }
           <button type="button" class="ghost" (click)="remove(item.id)">
             {{ i18n.t('clipboard.delete') }}
           </button>
