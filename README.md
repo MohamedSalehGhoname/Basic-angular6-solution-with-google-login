@@ -222,10 +222,21 @@ npm run add:android   # or add:ios — generate the native project
 npm run open:android  # open in Android Studio / Xcode to run on a device
 ```
 
-Before shipping on a device you must, outside this repo: point
-`web/src/app/sync.config.ts` at your deployed sync server (a phone's
-`localhost` is the phone itself), and register the app's bundle/package id and
-OAuth client with your Firebase project so Google sign-in works. Building and
+The production web build (which `npm run sync` bundles) already points at
+<https://ghoclipboard.ghonameservices.com>, so the app works against the hosted
+server; enter the access key once on its login page. Package id:
+`com.ghonametech.ghoclipboard`. **Download** on a phone fetches the file through
+the sync server, decrypts it, and opens the share sheet to save or open it
+(150 MB max). Build a debug APK on Windows with:
+
+```bash
+cd mobile && npm run sync && cd android
+JAVA_HOME=<jdk-21> ANDROID_HOME=<android-sdk> ./gradlew.bat assembleDebug
+# → android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+For Google sign-in you must still register the package id and OAuth client
+with your Firebase project. Building and
 running on a device needs Android Studio / Xcode and is not exercised in CI;
 the `cap` config, the web bundling, and native-project generation with all
 plugins were verified here.

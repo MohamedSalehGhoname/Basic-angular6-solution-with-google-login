@@ -6,6 +6,7 @@ import { ClipboardStore } from './clipboard-store';
 import type { FileSendRequest } from './desktop-capture.service';
 import { encryptedSize, fromBase64 } from './file-crypto';
 import { FileShareService } from './file-share.service';
+import { NativeBridge } from './native-bridge.service';
 import { FileRequestError, SyncApi } from './sync-api';
 import { VaultService, type VaultStatus } from './vault.service';
 
@@ -67,6 +68,7 @@ describe('FileShareService', () => {
     fileContent: ReturnType<typeof vi.fn>;
   };
   let addFile: ReturnType<typeof vi.fn>;
+  let native: { canSaveFile: boolean; saveFile: ReturnType<typeof vi.fn> };
 
   const inject = () => {
     TestBed.configureTestingModule({
@@ -75,6 +77,7 @@ describe('FileShareService', () => {
         { provide: VaultService, useValue: { status } },
         { provide: ClipboardStore, useValue: { addFile } },
         { provide: SyncApi, useValue: api },
+        { provide: NativeBridge, useValue: native },
       ],
     });
     return TestBed.inject(FileShareService);
@@ -103,6 +106,7 @@ describe('FileShareService', () => {
       fileContent: vi.fn(async () => fromBase64(VECTOR)),
     };
     addFile = vi.fn(async () => null);
+    native = { canSaveFile: false, saveFile: vi.fn(async () => undefined) };
   });
 
   afterEach(() => {
@@ -249,5 +253,30 @@ describe('FileShareService', () => {
     expect(opened).toBe('https://storage/get');
     expect(api.fileContent).not.toHaveBeenCalled();
     click.mockRestore();
+  });
+
+  it('on the phone, fetches through the server, decrypts and hands it to the share sheet', async () => {
+    delete (window as unknown as { clipsyncDesktop?: unknown }).clipsyncDesktop;
+    native.canSaveFile = true;
+    const key = btoa(String.fromCharCode(...new Uint8Array(32).fill(7)));
+    const service = inject();
+    await service.download({ id: 'fil_1', name: 'vector.txt', size: 48, key });
+
+    expect(api.fileContent).toHaveBeenCalledWith('fil_1');
+    const [name, bytes] = native.saveFile.mock.calls[0]!;
+    expect(name).toBe('vector.txt');
+    expect(new TextDecoder().decode(bytes as Uint8Array)).toBe(
+      'Clipboard Sync shared test vector, three chunks!',
+    );
+    expect(service.transfers()).toEqual([]);
+  });
+
+  it('refuses files too large for the phone', async () => {
+    delete (window as unknown as { clipsyncDesktop?: unknown }).clipsyncDesktop;
+    native.canSaveFile = true;
+    const service = inject();
+    await service.download({ id: 'fil_1', name: 'big.iso', size: 200 * 1024 * 1024 });
+    expect(api.fileContent).not.toHaveBeenCalled();
+    expect(service.transfers()[0]!.error).toBe('files.error.tooLargePhone');
   });
 });

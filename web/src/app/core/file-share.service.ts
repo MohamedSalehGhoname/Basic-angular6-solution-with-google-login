@@ -4,6 +4,7 @@ import { ClipboardStore, type ClipboardFile } from './clipboard-store';
 import type { FileSendRequest } from './desktop-capture.service';
 import { decryptFile, encryptedSize, fromBase64, newFileKey } from './file-crypto';
 import { I18nService } from './i18n/i18n.service';
+import { NativeBridge } from './native-bridge.service';
 import type { TranslationKey } from './i18n/translations';
 import { FileRequestError, SyncApi } from './sync-api';
 import { VaultService } from './vault.service';
@@ -24,6 +25,8 @@ export interface FileTransfer {
 const ENCRYPT_KEY = 'clipsync.files.encrypt';
 // Browsers decrypt in memory; past this, point people at the desktop app.
 const BROWSER_DECRYPT_LIMIT = 512 * 1024 * 1024;
+// The phone app moves the whole file through the native bridge as base64.
+const PHONE_FILE_LIMIT = 150 * 1024 * 1024;
 const FAILED_VISIBLE_MS = 8000;
 
 /**
@@ -41,6 +44,7 @@ export class FileShareService {
   private readonly vault = inject(VaultService);
   private readonly auth = inject(AuthService);
   private readonly i18n = inject(I18nService);
+  private readonly native = inject(NativeBridge);
 
   private readonly desktop = window.clipsyncDesktop;
   /** Whether this app can send files (the desktop app with the Explorer menu). */
@@ -154,6 +158,15 @@ export class FileShareService {
           name: file.name,
           key: file.key ?? null,
         });
+      } else if (this.native.canSaveFile) {
+        // Phone: fetch through the server (the WebView cannot fetch storage
+        // cross-origin), decrypt if needed, then hand it to the share sheet.
+        if (file.size > PHONE_FILE_LIMIT) {
+          throw new Error('too-large-phone');
+        }
+        const stored = await this.api.fileContent(file.id);
+        const bytes = file.key ? await decryptFile(stored, fromBase64(file.key)) : stored;
+        await this.native.saveFile(file.name, bytes);
       } else if (!file.key) {
         // Opened, not fetched: storage URLs are cross-origin.
         const link = document.createElement('a');
@@ -217,6 +230,9 @@ function describe(err: unknown): TranslationKey {
   }
   if (err instanceof Error && err.message === 'too-large') {
     return 'files.error.tooLarge';
+  }
+  if (err instanceof Error && err.message === 'too-large-phone') {
+    return 'files.error.tooLargePhone';
   }
   if (err instanceof Error && /decrypt/i.test(err.message)) {
     return 'files.error.decrypt';
