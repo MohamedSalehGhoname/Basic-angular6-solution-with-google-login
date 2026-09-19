@@ -1,8 +1,11 @@
 <header>
   <div class="left">
-    <a routerLink="/" class="brand">Clipboard Sync</a>
+    <a routerLink="/" class="brand">
+      <span class="brand-mark" aria-hidden="true">⧉</span>
+      Clipboard Sync
+    </a>
     @if (vault.status() === 'unlocked') {
-      <nav>
+      <nav aria-label="Sections">
         <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">
           Clipboard
         </a>
@@ -11,18 +14,37 @@
     }
   </div>
 
-  @if (auth.user(); as user) {
-    <div class="user">
-      @if (user.photoURL) {
-        <img [src]="user.photoURL" [alt]="user.displayName ?? 'User avatar'" referrerpolicy="no-referrer" />
-      } @else {
-        <span class="avatar-fallback">{{ (user.displayName ?? user.email ?? '?').charAt(0).toUpperCase() }}</span>
-      }
-      <span class="name">{{ user.displayName ?? user.email }}</span>
-      @if (vault.status() === 'unlocked') {
-        <button type="button" (click)="lockVault()">Lock</button>
-      }
-      <button type="button" (click)="signOut()">Sign out</button>
-    </div>
-  }
+  <div class="right">
+    <button
+      type="button"
+      class="icon-btn"
+      (click)="theme.cycle()"
+      [attr.aria-label]="themeLabel()"
+      [title]="themeLabel()"
+    >
+      {{ themeIcon() }}
+    </button>
+
+    @if (auth.user(); as user) {
+      <div class="user">
+        @if (user.photoURL) {
+          <img
+            class="avatar"
+            [src]="user.photoURL"
+            [alt]="user.displayName ?? 'User avatar'"
+            referrerpolicy="no-referrer"
+          />
+        } @else {
+          <span class="avatar avatar-fallback" aria-hidden="true">
+            {{ (user.displayName ?? user.email ?? '?').charAt(0).toUpperCase() }}
+          </span>
+        }
+        <span class="name">{{ user.displayName ?? user.email }}</span>
+        @if (vault.status() === 'unlocked') {
+          <button type="button" class="btn-ghost" (click)="lockVault()">Lock</button>
+        }
+        <button type="button" class="btn-ghost" (click)="signOut()">Sign out</button>
+      </div>
+    }
+  </div>
 </header>

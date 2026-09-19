@@ -1,17 +1,19 @@
 :host {
   display: grid;
   place-items: center;
-  min-height: 70vh;
+  min-height: 72vh;
 }
 
 .unlock-card {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  width: min(24rem, 100%);
+  width: min(25rem, 100%);
   padding: 2.5rem 2rem;
-  border: 1px solid #e0e0e0;
-  border-radius: 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
 }
 
 .unlock-card h1 {
@@ -21,7 +23,7 @@
 
 .unlock-card p {
   margin: 0;
-  color: #555;
+  color: var(--text-muted);
   font-size: 0.95rem;
 }
 
@@ -29,37 +31,46 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
 }
 
 input {
-  padding: 0.55rem 0.7rem;
-  font-size: 1rem;
-  border: 1px solid #ccc;
-  border-radius: 0.4rem;
+  padding: 0.6rem 0.7rem;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
+input:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
 }
 
 .hint {
   font-size: 0.8rem;
-  color: #888;
+  color: var(--text-subtle);
 }
 
-button {
-  padding: 0.6rem 1rem;
+button[type='submit'] {
+  padding: 0.65rem 1rem;
+  font: inherit;
   font-size: 1rem;
   border: none;
-  border-radius: 0.5rem;
-  background: #4285f4;
-  color: #fff;
+  border-radius: var(--radius-sm);
+  background: var(--primary);
+  color: var(--on-primary);
   cursor: pointer;
 }
 
-button:disabled {
-  opacity: 0.6;
+button[type='submit']:disabled {
+  opacity: 0.55;
   cursor: default;
 }
 
 .error {
-  color: #b3261e;
+  color: var(--danger);
   font-size: 0.875rem;
 }
