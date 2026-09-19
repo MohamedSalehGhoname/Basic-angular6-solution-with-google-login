@@ -1,12 +1,22 @@
 import { Injectable } from '@angular/core';
 import { type Entry, SyncedCollection } from './synced-collection';
 
+/** An image attached to a secret, stored inline (base64 data URL) and thus
+ * encrypted with the rest of the entry. */
+export interface Attachment {
+  name: string;
+  type: string;
+  /** `data:<mime>;base64,…` */
+  data: string;
+}
+
 export interface SecretFields {
   title: string;
   username: string;
   password: string;
   url: string;
   notes: string;
+  attachments: Attachment[];
 }
 
 interface SecretPayload extends SecretFields {
@@ -60,6 +70,7 @@ export class SecretsStore extends SyncedCollection<SecretPayload> {
       password: fields.password,
       url: fields.url.trim(),
       notes: fields.notes,
+      attachments: Array.isArray(fields.attachments) ? fields.attachments : [],
     };
   }
 }

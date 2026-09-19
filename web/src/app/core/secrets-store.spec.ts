@@ -14,6 +14,7 @@ const fields = (over: Partial<SecretFields> = {}): SecretFields => ({
   password: 'hunter2',
   url: 'https://github.com',
   notes: '',
+  attachments: [],
   ...over,
 });
 
@@ -68,6 +69,29 @@ describe('SecretsStore', () => {
   it('requires a title', async () => {
     expect(await store.add(fields({ title: '   ' }))).toBeNull();
     expect(store.items()).toEqual([]);
+  });
+
+  it('round-trips image attachments inside the encrypted entry', async () => {
+    const attachment = {
+      name: 'photo.jpg',
+      type: 'image/jpeg',
+      data: 'data:image/jpeg;base64,/9j/AAAA',
+    };
+    const entry = await store.add(fields({ title: 'With image', attachments: [attachment] }));
+    expect(entry!.attachments).toEqual([attachment]);
+
+    // Nothing about the image leaks into the stored ciphertext.
+    for (const item of syncApi.collections.get('secrets')!.values()) {
+      expect(item.blob).not.toContain('base64');
+      expect(item.blob.startsWith('xcv1:')).toBe(true);
+    }
+
+    // Survives a reload/decrypt.
+    TestBed.resetTestingModule();
+    configure();
+    await vault.unlock('a long passphrase');
+    await store.load();
+    expect(store.items()[0].attachments).toEqual([attachment]);
   });
 
   it('stores only ciphertext, never the password, in its own collection', async () => {

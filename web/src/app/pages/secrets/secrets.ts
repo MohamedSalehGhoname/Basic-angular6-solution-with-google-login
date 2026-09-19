@@ -2,10 +2,23 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ClipboardCopyService } from '../../core/clipboard-copy.service';
 import { I18nService } from '../../core/i18n/i18n.service';
+import { fileToAttachment } from '../../core/image-utils';
 import { DEFAULT_PASSWORD_OPTIONS, generatePassword } from '../../core/password-generator';
-import { SecretsStore, type SecretEntry, type SecretFields } from '../../core/secrets-store';
+import {
+  type Attachment,
+  SecretsStore,
+  type SecretEntry,
+  type SecretFields,
+} from '../../core/secrets-store';
 
-const EMPTY_FORM: SecretFields = { title: '', username: '', password: '', url: '', notes: '' };
+const EMPTY_FORM: SecretFields = {
+  title: '',
+  username: '',
+  password: '',
+  url: '',
+  notes: '',
+  attachments: [],
+};
 
 @Component({
   selector: 'app-secrets',
@@ -24,8 +37,11 @@ export class Secrets {
   protected readonly editingId = signal<string | null>(null);
   protected readonly formOpen = signal(false);
   protected readonly revealed = signal<Set<string>>(new Set());
+  protected readonly notesRevealed = signal<Set<string>>(new Set());
   protected readonly search = signal('');
-  protected form: SecretFields = { ...EMPTY_FORM };
+  protected form: SecretFields = { ...EMPTY_FORM, attachments: [] };
+  // Held in a signal (not on `form`) so async attach/remove updates re-render.
+  protected readonly formAttachments = signal<Attachment[]>([]);
 
   protected readonly editingTitle = computed(() => {
     const id = this.editingId();
@@ -61,7 +77,8 @@ export class Secrets {
   }
 
   protected startAdd(): void {
-    this.form = { ...EMPTY_FORM };
+    this.form = { ...EMPTY_FORM, attachments: [] };
+    this.formAttachments.set([]);
     this.editingId.set('');
     this.formOpen.set(true);
   }
@@ -73,7 +90,9 @@ export class Secrets {
       password: entry.password,
       url: entry.url,
       notes: entry.notes,
+      attachments: [],
     };
+    this.formAttachments.set([...(entry.attachments ?? [])]);
     this.editingId.set(entry.id);
     this.formOpen.set(true);
   }
@@ -81,7 +100,38 @@ export class Secrets {
   protected cancel(): void {
     this.formOpen.set(false);
     this.editingId.set(null);
-    this.form = { ...EMPTY_FORM };
+    this.form = { ...EMPTY_FORM, attachments: [] };
+    this.formAttachments.set([]);
+  }
+
+  protected async onAttachImages(input: HTMLInputElement): Promise<void> {
+    const files = Array.from(input.files ?? []);
+    input.value = '';
+    this.error.set(null);
+    for (const file of files) {
+      try {
+        const attachment = await fileToAttachment(file);
+        this.formAttachments.update((list) => [...list, attachment]);
+      } catch (err) {
+        this.error.set(err instanceof Error ? err.message : 'Could not attach the image.');
+      }
+    }
+  }
+
+  protected removeAttachment(index: number): void {
+    this.formAttachments.update((list) => list.filter((_, i) => i !== index));
+  }
+
+  protected toggleNotes(id: string): void {
+    this.notesRevealed.update((set) => {
+      const next = new Set(set);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  protected isNotesRevealed(id: string): boolean {
+    return this.notesRevealed().has(id);
   }
 
   protected async submit(): Promise<void> {
@@ -91,11 +141,12 @@ export class Secrets {
     }
     this.error.set(null);
     try {
+      const fields: SecretFields = { ...this.form, attachments: this.formAttachments() };
       const id = this.editingId();
       if (id) {
-        await this.store.save(id, this.form);
+        await this.store.save(id, fields);
       } else {
-        await this.store.add(this.form);
+        await this.store.add(fields);
       }
       this.cancel();
     } catch (err) {

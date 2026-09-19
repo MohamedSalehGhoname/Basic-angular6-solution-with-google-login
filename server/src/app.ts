@@ -25,7 +25,9 @@ declare module 'fastify' {
 // store can only ever hold ciphertext-shaped strings.
 const BLOB_PATTERN = '^xcv1:[A-Za-z0-9_-]+$';
 const BASE64URL_PATTERN = '^[A-Za-z0-9_-]+$';
-const MAX_BLOB_LENGTH = 256 * 1024;
+// Large enough to hold a secret with a few compressed image attachments (all
+// ciphertext); the client downscales images so entries stay well under this.
+const MAX_BLOB_LENGTH = 8 * 1024 * 1024;
 
 const wrappedKeyProps = {
   salt: { type: 'string', pattern: BASE64URL_PATTERN, maxLength: 128 },
@@ -90,7 +92,8 @@ export function buildApp(options: AppOptions): App {
   const db = new SyncDb(options.dbPath);
   const hub = new SyncHub();
   const maxItems = options.maxItems ?? 200;
-  const fastify = Fastify({ logger: options.logger ?? false });
+  // Body limit above MAX_BLOB_LENGTH so image-bearing (ciphertext) items fit.
+  const fastify = Fastify({ logger: options.logger ?? false, bodyLimit: 12 * 1024 * 1024 });
 
   const clientId = (request: FastifyRequest): string | null => {
     const value = request.headers['x-client-id'];
