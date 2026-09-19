@@ -71,7 +71,7 @@ describe('sync WebSocket', () => {
       bobGotMessage = true;
     });
 
-    const res = await fetch(`http://${base}/api/items/i1`, {
+    const res = await fetch(`http://${base}/api/clipboard/items/i1`, {
       method: 'PUT',
       headers: {
         authorization: 'Bearer token-alice',
@@ -82,8 +82,13 @@ describe('sync WebSocket', () => {
     });
     expect(res.status).toBe(204);
 
-    const event = (await phoneEvent) as { type: string; item: { id: string; blob: string } };
+    const event = (await phoneEvent) as {
+      type: string;
+      collection: string;
+      item: { id: string; blob: string };
+    };
     expect(event.type).toBe('item-added');
+    expect(event.collection).toBe('clipboard');
     expect(event.item.id).toBe('i1');
     expect(event.item.blob).toBe('xcv1:ciphertext');
 

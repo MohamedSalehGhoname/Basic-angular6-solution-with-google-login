@@ -15,11 +15,13 @@ export interface RemoteItem {
   createdAt: number;
 }
 
+export type Collection = 'clipboard' | 'secrets';
+
 export type SyncEvent =
   | { type: 'vault-updated' }
-  | { type: 'item-added'; item: RemoteItem }
-  | { type: 'item-removed'; id: string }
-  | { type: 'items-cleared' };
+  | { type: 'item-added'; collection: Collection; item: RemoteItem }
+  | { type: 'item-removed'; collection: Collection; id: string }
+  | { type: 'items-cleared'; collection: Collection };
 
 /**
  * Identifies this tab to the server so its own writes are not echoed back
@@ -49,24 +51,26 @@ export class SyncApi {
     this.assertOk(await this.request('PUT', '/api/vault', vault));
   }
 
-  async listItems(): Promise<RemoteItem[]> {
-    const res = await this.request('GET', '/api/items');
+  async listItems(collection: Collection): Promise<RemoteItem[]> {
+    const res = await this.request('GET', `/api/${collection}/items`);
     this.assertOk(res);
     return ((await res.json()) as { items: RemoteItem[] }).items;
   }
 
-  async putItem(id: string, blob: string): Promise<void> {
+  async putItem(collection: Collection, id: string, blob: string): Promise<void> {
     this.assertOk(
-      await this.request('PUT', `/api/items/${encodeURIComponent(id)}`, { blob }),
+      await this.request('PUT', `/api/${collection}/items/${encodeURIComponent(id)}`, { blob }),
     );
   }
 
-  async deleteItem(id: string): Promise<void> {
-    this.assertOk(await this.request('DELETE', `/api/items/${encodeURIComponent(id)}`));
+  async deleteItem(collection: Collection, id: string): Promise<void> {
+    this.assertOk(
+      await this.request('DELETE', `/api/${collection}/items/${encodeURIComponent(id)}`),
+    );
   }
 
-  async clearItems(): Promise<void> {
-    this.assertOk(await this.request('DELETE', '/api/items'));
+  async clearItems(collection: Collection): Promise<void> {
+    this.assertOk(await this.request('DELETE', `/api/${collection}/items`));
   }
 
   /**

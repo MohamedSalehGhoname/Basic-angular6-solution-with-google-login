@@ -37,8 +37,18 @@ npm test         # unit tests
 Signed-out visitors are redirected to `/login`. After Google sign-in you set up
 (first visit) or enter your vault passphrase on `/unlock` — it derives the
 encryption keys client-side and is unrecoverable by design — and then land on
-the (currently empty) clipboard page. The vault relocks on reload, on the
-header's Lock button, and on sign-out.
+the clipboard page. The vault relocks on reload, on the header's Lock button,
+and on sign-out.
+
+Two vaults share the one encryption key, reachable from the header once
+unlocked:
+
+- **Clipboard** (`/`): free-text items with a per-item TTL (1 hour / 1 day /
+  1 week / forever), copy, paste-from-clipboard, and delete.
+- **Secrets** (`/secrets`): KeePass-style structured entries (title, username,
+  password, URL, notes) that are editable and never expire. Copying a password
+  auto-clears it from the OS clipboard after 12 seconds (a plain username copy
+  does not), matching KeePass.
 
 ## Sync server
 
@@ -58,11 +68,14 @@ Environment: `PORT` (default 8787), `HOST`, `DATABASE_PATH` (SQLite file,
 default `clipsync.db`), `FIREBASE_PROJECT_ID`, `INSECURE_DEV_AUTH=1` (dev
 only: bearer token is trusted as the uid).
 
-API (bearer-token auth): `GET/PUT /api/vault` for the vault record,
-`GET /api/items`, `PUT/DELETE /api/items/:id`, `DELETE /api/items`, and
-`GET /api/sync?token=…&clientId=…` — a WebSocket that pushes
-`vault-updated` / `item-added` / `item-removed` / `items-cleared` events to
-the user's other devices, skipping the originating `clientId`. History is
+API (bearer-token auth): `GET/PUT /api/vault` for the vault record, and
+per-collection item routes where `:collection` is `clipboard` or `secrets` —
+`GET /api/:collection/items`, `PUT/DELETE /api/:collection/items/:id`,
+`DELETE /api/:collection/items` — plus
+`GET /api/sync?token=…&clientId=…`, a WebSocket that pushes
+`vault-updated` / `item-added` / `item-removed` / `items-cleared` events
+(each carrying its `collection`) to the user's other devices, skipping the
+originating `clientId`. History is
 capped at 200 items per user.
 
 The web client talks to this server (base URL in `web/src/app/sync.config.ts`,

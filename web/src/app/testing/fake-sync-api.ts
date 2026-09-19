@@ -1,12 +1,12 @@
-import type { RemoteItem, RemoteVault, SyncEvent } from '../core/sync-api';
+import type { Collection, RemoteItem, RemoteVault, SyncEvent } from '../core/sync-api';
 
 /**
- * In-memory stand-in for SyncApi in specs: mimics the server's behavior,
- * can be flipped offline, and lets tests emit WebSocket events.
+ * In-memory stand-in for SyncApi in specs: mimics the server's per-collection
+ * behavior, can be flipped offline, and lets tests emit WebSocket events.
  */
 export class FakeSyncApi {
   vault: RemoteVault | null = null;
-  readonly items = new Map<string, { blob: string; createdAt: number }>();
+  readonly collections = new Map<Collection, Map<string, { blob: string; createdAt: number }>>();
   offline = false;
 
   private clock = 0;
@@ -19,6 +19,20 @@ export class FakeSyncApi {
     }
   }
 
+  private store(collection: Collection): Map<string, { blob: string; createdAt: number }> {
+    let map = this.collections.get(collection);
+    if (!map) {
+      map = new Map();
+      this.collections.set(collection, map);
+    }
+    return map;
+  }
+
+  /** Convenience accessor for the clipboard collection used by older specs. */
+  get items(): Map<string, { blob: string; createdAt: number }> {
+    return this.store('clipboard');
+  }
+
   async getVault(): Promise<RemoteVault | null> {
     this.fail();
     return this.vault;
@@ -29,26 +43,28 @@ export class FakeSyncApi {
     this.vault = vault;
   }
 
-  async listItems(): Promise<RemoteItem[]> {
+  async listItems(collection: Collection): Promise<RemoteItem[]> {
     this.fail();
-    return [...this.items.entries()]
+    return [...this.store(collection).entries()]
       .map(([id, item]) => ({ id, ...item }))
       .sort((a, b) => b.createdAt - a.createdAt);
   }
 
-  async putItem(id: string, blob: string): Promise<void> {
+  async putItem(collection: Collection, id: string, blob: string): Promise<void> {
     this.fail();
-    this.items.set(id, { blob, createdAt: ++this.clock });
+    const map = this.store(collection);
+    const existing = map.get(id);
+    map.set(id, { blob, createdAt: existing?.createdAt ?? ++this.clock });
   }
 
-  async deleteItem(id: string): Promise<void> {
+  async deleteItem(collection: Collection, id: string): Promise<void> {
     this.fail();
-    this.items.delete(id);
+    this.store(collection).delete(id);
   }
 
-  async clearItems(): Promise<void> {
+  async clearItems(collection: Collection): Promise<void> {
     this.fail();
-    this.items.clear();
+    this.store(collection).clear();
   }
 
   connect(

@@ -63,7 +63,7 @@ describe('ClipboardStore', () => {
 
   it('stores only ciphertext locally and on the server', async () => {
     await store.add('super secret text');
-    const raw = localStorage.getItem('clipsync.items.test-uid')!;
+    const raw = localStorage.getItem('clipsync.clipboard.test-uid')!;
     expect(raw).not.toContain('super secret');
     expect(raw).toContain('xcv1:');
     for (const item of syncApi.items.values()) {
@@ -107,7 +107,7 @@ describe('ClipboardStore', () => {
     const remoteBlob = await vault.encryptItem(
       JSON.stringify({ text: 'from another device', device: 'Phone', copiedAt: Date.now() + 1 }),
     );
-    await syncApi.putItem('remote-1', remoteBlob);
+    await syncApi.putItem('clipboard', 'remote-1', remoteBlob);
 
     TestBed.resetTestingModule();
     configure();
@@ -129,15 +129,15 @@ describe('ClipboardStore', () => {
     const blob = await vault.encryptItem(
       JSON.stringify({ text: 'pushed via ws', device: 'Phone', copiedAt: Date.now() }),
     );
-    syncApi.emit({ type: 'item-added', item: { id: 'ws-1', blob, createdAt: 1 } });
+    syncApi.emit({ type: 'item-added', collection: 'clipboard', item: { id: 'ws-1', blob, createdAt: 1 } });
     await waitFor(() => store.items().some((item) => item.id === 'ws-1'));
     expect(store.items()[0].text).toBe('pushed via ws');
 
-    syncApi.emit({ type: 'item-removed', id: 'ws-1' });
+    syncApi.emit({ type: 'item-removed', collection: 'clipboard', id: 'ws-1' });
     await waitFor(() => !store.items().some((item) => item.id === 'ws-1'));
 
     await store.add('to be cleared');
-    syncApi.emit({ type: 'items-cleared' });
+    syncApi.emit({ type: 'items-cleared', collection: 'clipboard' });
     await waitFor(() => store.items().length === 0);
   });
 
@@ -151,7 +151,7 @@ describe('ClipboardStore', () => {
 
     store.clear();
     expect(store.items()).toEqual([]);
-    expect(localStorage.getItem('clipsync.items.test-uid')).toContain('"items":[]');
+    expect(localStorage.getItem('clipsync.clipboard.test-uid')).toContain('"items":[]');
     await waitFor(() => syncApi.items.size === 0);
   });
 
@@ -175,7 +175,7 @@ describe('ClipboardStore', () => {
     expect(syncApi.items.has(doomed!.id)).toBe(false);
     expect(store.online()).toBe(true);
     // Tombstone is consumed once replayed.
-    expect(JSON.parse(localStorage.getItem('clipsync.items.test-uid')!).deleted).toEqual([]);
+    expect(JSON.parse(localStorage.getItem('clipsync.clipboard.test-uid')!).deleted).toEqual([]);
   });
 
   it('does not resurrect items cleared while offline', async () => {
@@ -207,14 +207,14 @@ describe('ClipboardStore', () => {
     await waitFor(() => store.online() === false);
 
     await store.load();
-    syncApi.emit({ type: 'item-added', item: { id: doomed!.id, blob, createdAt: 1 } });
+    syncApi.emit({ type: 'item-added', collection: 'clipboard', item: { id: doomed!.id, blob, createdAt: 1 } });
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(store.items().some((item) => item.id === doomed!.id)).toBe(false);
   });
 
   it('skips blobs it cannot decrypt instead of failing the load', async () => {
     await store.add('good item');
-    const key = 'clipsync.items.test-uid';
+    const key = 'clipsync.clipboard.test-uid';
     const stored = JSON.parse(localStorage.getItem(key)!);
     stored.items.push({ id: 'bad', blob: 'xcv1:not-really-ciphertext' });
     localStorage.setItem(key, JSON.stringify(stored));
@@ -243,7 +243,7 @@ describe('ClipboardStore', () => {
     const expiredBlob = await vault.encryptItem(
       JSON.stringify({ text: 'stale', device: 'Phone', copiedAt: 1, expiresAt: Date.now() - 1000 }),
     );
-    await syncApi.putItem('stale-1', expiredBlob);
+    await syncApi.putItem('clipboard', 'stale-1', expiredBlob);
     await store.add('still fresh');
 
     TestBed.resetTestingModule();
@@ -270,7 +270,7 @@ describe('ClipboardStore', () => {
     const blob = await vault.encryptItem(
       JSON.stringify({ text: 'dead on arrival', device: 'Phone', copiedAt: 1, expiresAt: Date.now() - 1 }),
     );
-    syncApi.emit({ type: 'item-added', item: { id: 'dead-1', blob, createdAt: 1 } });
+    syncApi.emit({ type: 'item-added', collection: 'clipboard', item: { id: 'dead-1', blob, createdAt: 1 } });
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(store.items()).toEqual([]);
   });

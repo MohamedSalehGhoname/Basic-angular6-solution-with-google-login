@@ -48,10 +48,23 @@ const itemBodySchema = {
   },
 } as const;
 
+// The server treats collections opaquely but allowlists the known ones so a
+// typo or hostile client cannot spawn arbitrary namespaces.
+const COLLECTIONS = ['clipboard', 'secrets'] as const;
+
+const collectionParamsSchema = {
+  type: 'object',
+  required: ['collection'],
+  properties: {
+    collection: { type: 'string', enum: COLLECTIONS },
+  },
+} as const;
+
 const itemParamsSchema = {
   type: 'object',
-  required: ['id'],
+  required: ['collection', 'id'],
   properties: {
+    collection: { type: 'string', enum: COLLECTIONS },
     id: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,64}$' },
   },
 } as const;
@@ -113,36 +126,48 @@ export function buildApp(options: AppOptions): App {
       return reply.code(204).send();
     });
 
-    api.get('/items', async (request) => ({ items: db.listItems(request.uid) }));
+    api.get(
+      '/:collection/items',
+      { schema: { params: collectionParamsSchema } },
+      async (request) => {
+        const { collection } = request.params as { collection: string };
+        return { items: db.listItems(request.uid, collection) };
+      },
+    );
 
     api.put(
-      '/items/:id',
+      '/:collection/items/:id',
       { schema: { body: itemBodySchema, params: itemParamsSchema } },
       async (request, reply) => {
-        const { id } = request.params as { id: string };
+        const { collection, id } = request.params as { collection: string; id: string };
         const { blob } = request.body as { blob: string };
-        const item = db.putItem(request.uid, id, blob, maxItems);
-        hub.broadcast(request.uid, { type: 'item-added', item }, clientId(request));
+        const item = db.putItem(request.uid, collection, id, blob, maxItems);
+        hub.broadcast(request.uid, { type: 'item-added', collection, item }, clientId(request));
         return reply.code(204).send();
       },
     );
 
     api.delete(
-      '/items/:id',
+      '/:collection/items/:id',
       { schema: { params: itemParamsSchema } },
       async (request, reply) => {
-        const { id } = request.params as { id: string };
-        db.deleteItem(request.uid, id);
-        hub.broadcast(request.uid, { type: 'item-removed', id }, clientId(request));
+        const { collection, id } = request.params as { collection: string; id: string };
+        db.deleteItem(request.uid, collection, id);
+        hub.broadcast(request.uid, { type: 'item-removed', collection, id }, clientId(request));
         return reply.code(204).send();
       },
     );
 
-    api.delete('/items', async (request, reply) => {
-      db.clearItems(request.uid);
-      hub.broadcast(request.uid, { type: 'items-cleared' }, clientId(request));
-      return reply.code(204).send();
-    });
+    api.delete(
+      '/:collection/items',
+      { schema: { params: collectionParamsSchema } },
+      async (request, reply) => {
+        const { collection } = request.params as { collection: string };
+        db.clearItems(request.uid, collection);
+        hub.broadcast(request.uid, { type: 'items-cleared', collection }, clientId(request));
+        return reply.code(204).send();
+      },
+    );
   }, { prefix: '/api' });
 
   // Browsers cannot set headers on WebSocket upgrades, so auth rides the

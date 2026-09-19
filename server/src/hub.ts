@@ -2,9 +2,13 @@ import type { WebSocket } from 'ws';
 
 export type SyncEvent =
   | { type: 'vault-updated' }
-  | { type: 'item-added'; item: { id: string; blob: string; createdAt: number } }
-  | { type: 'item-removed'; id: string }
-  | { type: 'items-cleared' };
+  | {
+      type: 'item-added';
+      collection: string;
+      item: { id: string; blob: string; createdAt: number };
+    }
+  | { type: 'item-removed'; collection: string; id: string }
+  | { type: 'items-cleared'; collection: string };
 
 interface Connection {
   socket: WebSocket;

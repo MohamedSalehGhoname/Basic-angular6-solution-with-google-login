@@ -32,7 +32,8 @@ describe('sync API', () => {
   it('allows the write methods and headers the browser preflights', async () => {
     const res = await app.fastify.inject({
       method: 'OPTIONS',
-      url: '/api/items/abc',
+      url: '/api/clipboard/items/abc',
+      // preflight path is illustrative; any item route shares the CORS config
       headers: {
         origin: 'http://localhost:4200',
         'access-control-request-method': 'PUT',
@@ -48,12 +49,12 @@ describe('sync API', () => {
   });
 
   it('rejects missing and invalid tokens', async () => {
-    const missing = await app.fastify.inject({ method: 'GET', url: '/api/items' });
+    const missing = await app.fastify.inject({ method: 'GET', url: '/api/clipboard/items' });
     expect(missing.statusCode).toBe(401);
 
     const invalid = await app.fastify.inject({
       method: 'GET',
-      url: '/api/items',
+      url: '/api/clipboard/items',
       headers: { authorization: 'Bearer nope!' },
     });
     expect(invalid.statusCode).toBe(401);
@@ -100,7 +101,7 @@ describe('sync API', () => {
 
     const badItem = await app.fastify.inject({
       method: 'PUT',
-      url: '/api/items/a1',
+      url: '/api/clipboard/items/a1',
       headers: auth('alice'),
       payload: { blob: 'not encrypted at all' },
     });
@@ -114,7 +115,7 @@ describe('sync API', () => {
     ] as const) {
       const res = await app.fastify.inject({
         method: 'PUT',
-        url: `/api/items/${id}`,
+        url: `/api/clipboard/items/${id}`,
         headers: auth('alice'),
         payload: { blob: blob(suffix) },
       });
@@ -123,7 +124,7 @@ describe('sync API', () => {
 
     const list = await app.fastify.inject({
       method: 'GET',
-      url: '/api/items',
+      url: '/api/clipboard/items',
       headers: auth('alice'),
     });
     const ids = list.json().items.map((item: { id: string }) => item.id);
@@ -132,20 +133,20 @@ describe('sync API', () => {
 
     await app.fastify.inject({
       method: 'DELETE',
-      url: '/api/items/a1',
+      url: '/api/clipboard/items/a1',
       headers: auth('alice'),
     });
     const afterDelete = await app.fastify.inject({
       method: 'GET',
-      url: '/api/items',
+      url: '/api/clipboard/items',
       headers: auth('alice'),
     });
     expect(afterDelete.json().items.map((item: { id: string }) => item.id)).toEqual(['a2']);
 
-    await app.fastify.inject({ method: 'DELETE', url: '/api/items', headers: auth('alice') });
+    await app.fastify.inject({ method: 'DELETE', url: '/api/clipboard/items', headers: auth('alice') });
     const afterClear = await app.fastify.inject({
       method: 'GET',
-      url: '/api/items',
+      url: '/api/clipboard/items',
       headers: auth('alice'),
     });
     expect(afterClear.json().items).toEqual([]);
@@ -155,7 +156,7 @@ describe('sync API', () => {
     for (let i = 1; i <= 5; i++) {
       await app.fastify.inject({
         method: 'PUT',
-        url: `/api/items/item${i}`,
+        url: `/api/clipboard/items/item${i}`,
         headers: auth('alice'),
         payload: { blob: blob(`payload${i}`) },
       });
@@ -165,7 +166,7 @@ describe('sync API', () => {
 
     const list = await app.fastify.inject({
       method: 'GET',
-      url: '/api/items',
+      url: '/api/clipboard/items',
       headers: auth('alice'),
     });
     expect(list.json().items.map((item: { id: string }) => item.id)).toEqual([
@@ -178,16 +179,81 @@ describe('sync API', () => {
   it('isolates users from each other', async () => {
     await app.fastify.inject({
       method: 'PUT',
-      url: '/api/items/a1',
+      url: '/api/clipboard/items/a1',
       headers: auth('alice'),
       payload: { blob: blob('alicedata') },
     });
 
     const bob = await app.fastify.inject({
       method: 'GET',
-      url: '/api/items',
+      url: '/api/clipboard/items',
       headers: auth('bob'),
     });
     expect(bob.json().items).toEqual([]);
+  });
+
+  it('keeps collections separate and rejects unknown ones', async () => {
+    await app.fastify.inject({
+      method: 'PUT',
+      url: '/api/clipboard/items/c1',
+      headers: auth('alice'),
+      payload: { blob: blob('clip') },
+    });
+    await app.fastify.inject({
+      method: 'PUT',
+      url: '/api/secrets/items/s1',
+      headers: auth('alice'),
+      payload: { blob: blob('secret') },
+    });
+
+    const clip = await app.fastify.inject({
+      method: 'GET',
+      url: '/api/clipboard/items',
+      headers: auth('alice'),
+    });
+    const secrets = await app.fastify.inject({
+      method: 'GET',
+      url: '/api/secrets/items',
+      headers: auth('alice'),
+    });
+    expect(clip.json().items.map((i: { id: string }) => i.id)).toEqual(['c1']);
+    expect(secrets.json().items.map((i: { id: string }) => i.id)).toEqual(['s1']);
+
+    const unknown = await app.fastify.inject({
+      method: 'GET',
+      url: '/api/passwords/items',
+      headers: auth('alice'),
+    });
+    expect(unknown.statusCode).toBe(400);
+  });
+
+  it('preserves an item timestamp across updates so edits do not reorder', async () => {
+    await app.fastify.inject({
+      method: 'PUT',
+      url: '/api/secrets/items/s1',
+      headers: auth('alice'),
+      payload: { blob: blob('v1') },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await app.fastify.inject({
+      method: 'PUT',
+      url: '/api/secrets/items/s2',
+      headers: auth('alice'),
+      payload: { blob: blob('v2') },
+    });
+    // Edit the older entry; it must keep its place, not jump to the top.
+    await app.fastify.inject({
+      method: 'PUT',
+      url: '/api/secrets/items/s1',
+      headers: auth('alice'),
+      payload: { blob: blob('v1-edited') },
+    });
+
+    const list = await app.fastify.inject({
+      method: 'GET',
+      url: '/api/secrets/items',
+      headers: auth('alice'),
+    });
+    expect(list.json().items.map((i: { id: string }) => i.id)).toEqual(['s2', 's1']);
   });
 });

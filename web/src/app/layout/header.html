@@ -1,5 +1,15 @@
 <header>
-  <a routerLink="/" class="brand">Clipboard Sync</a>
+  <div class="left">
+    <a routerLink="/" class="brand">Clipboard Sync</a>
+    @if (vault.status() === 'unlocked') {
+      <nav>
+        <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">
+          Clipboard
+        </a>
+        <a routerLink="/secrets" routerLinkActive="active">Secrets</a>
+      </nav>
+    }
+  </div>
 
   @if (auth.user(); as user) {
     <div class="user">

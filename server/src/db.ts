@@ -35,12 +35,14 @@ export class SyncDb {
       );
       CREATE TABLE IF NOT EXISTS items (
         uid        TEXT NOT NULL,
+        collection TEXT NOT NULL,
         id         TEXT NOT NULL,
         blob       TEXT NOT NULL,
         created_at INTEGER NOT NULL,
-        PRIMARY KEY (uid, id)
+        PRIMARY KEY (uid, collection, id)
       );
-      CREATE INDEX IF NOT EXISTS items_by_user_time ON items (uid, created_at DESC);
+      CREATE INDEX IF NOT EXISTS items_by_collection_time
+        ON items (uid, collection, created_at DESC);
     `);
   }
 
@@ -81,39 +83,56 @@ export class SyncDb {
     return { ...vault, updatedAt };
   }
 
-  listItems(uid: string): ItemRecord[] {
+  listItems(uid: string, collection: string): ItemRecord[] {
     const rows = this.db
       .prepare(
-        'SELECT id, blob, created_at FROM items WHERE uid = ? ORDER BY created_at DESC, id',
+        `SELECT id, blob, created_at FROM items
+         WHERE uid = ? AND collection = ? ORDER BY created_at DESC, id`,
       )
-      .all(uid) as { id: string; blob: string; created_at: number }[];
+      .all(uid, collection) as { id: string; blob: string; created_at: number }[];
     return rows.map((row) => ({ id: row.id, blob: row.blob, createdAt: row.created_at }));
   }
 
-  putItem(uid: string, id: string, blob: string, maxItems: number): ItemRecord {
-    const createdAt = Date.now();
+  putItem(
+    uid: string,
+    collection: string,
+    id: string,
+    blob: string,
+    maxItems: number,
+  ): ItemRecord {
+    const existing = this.db
+      .prepare('SELECT created_at FROM items WHERE uid = ? AND collection = ? AND id = ?')
+      .get(uid, collection, id) as { created_at: number } | undefined;
+    // Preserve the original timestamp on update so an edit does not reorder
+    // the entry (secrets keep their place; clipboard items are immutable).
+    const createdAt = existing?.created_at ?? Date.now();
     const insert = this.db.prepare(
-      `INSERT INTO items (uid, id, blob, created_at) VALUES (?, ?, ?, ?)
-       ON CONFLICT (uid, id) DO UPDATE SET blob = excluded.blob`,
+      `INSERT INTO items (uid, collection, id, blob, created_at) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT (uid, collection, id) DO UPDATE SET blob = excluded.blob`,
     );
     const trim = this.db.prepare(
-      `DELETE FROM items WHERE uid = ? AND id NOT IN (
-         SELECT id FROM items WHERE uid = ? ORDER BY created_at DESC, id LIMIT ?
+      `DELETE FROM items WHERE uid = ? AND collection = ? AND id NOT IN (
+         SELECT id FROM items WHERE uid = ? AND collection = ?
+         ORDER BY created_at DESC, id LIMIT ?
        )`,
     );
     this.db.transaction(() => {
-      insert.run(uid, id, blob, createdAt);
-      trim.run(uid, uid, maxItems);
+      insert.run(uid, collection, id, blob, createdAt);
+      trim.run(uid, collection, uid, collection, maxItems);
     })();
     return { id, blob, createdAt };
   }
 
-  deleteItem(uid: string, id: string): boolean {
-    return this.db.prepare('DELETE FROM items WHERE uid = ? AND id = ?').run(uid, id).changes > 0;
+  deleteItem(uid: string, collection: string, id: string): boolean {
+    return (
+      this.db
+        .prepare('DELETE FROM items WHERE uid = ? AND collection = ? AND id = ?')
+        .run(uid, collection, id).changes > 0
+    );
   }
 
-  clearItems(uid: string): void {
-    this.db.prepare('DELETE FROM items WHERE uid = ?').run(uid);
+  clearItems(uid: string, collection: string): void {
+    this.db.prepare('DELETE FROM items WHERE uid = ? AND collection = ?').run(uid, collection);
   }
 
   close(): void {
