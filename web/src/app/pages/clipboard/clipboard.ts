@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ClipboardStore, TTL_OPTIONS, type ClipboardEntry } from '../../core/clipboard-store';
 import { DesktopCaptureService } from '../../core/desktop-capture.service';
@@ -19,6 +19,16 @@ export class Clipboard {
   protected readonly loading = signal(true);
   protected readonly error = signal<string | null>(null);
   protected readonly copiedId = signal<string | null>(null);
+  protected readonly search = signal('');
+
+  protected readonly filtered = computed(() => {
+    const query = this.search().trim().toLowerCase();
+    const items = this.store.items();
+    if (!query) {
+      return items;
+    }
+    return items.filter((item) => item.text.toLowerCase().includes(query));
+  });
 
   constructor() {
     void this.init();

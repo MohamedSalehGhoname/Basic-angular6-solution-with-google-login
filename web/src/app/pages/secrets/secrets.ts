@@ -21,11 +21,26 @@ export class Secrets {
   protected readonly editingId = signal<string | null>(null);
   protected readonly formOpen = signal(false);
   protected readonly revealed = signal<Set<string>>(new Set());
+  protected readonly search = signal('');
   protected form: SecretFields = { ...EMPTY_FORM };
 
   protected readonly editingTitle = computed(() => {
     const id = this.editingId();
     return id ? (this.store.items().find((entry) => entry.id === id)?.title ?? '') : '';
+  });
+
+  protected readonly filtered = computed(() => {
+    const query = this.search().trim().toLowerCase();
+    const items = this.store.items();
+    if (!query) {
+      return items;
+    }
+    return items.filter((entry) =>
+      [entry.title, entry.username, entry.url, entry.notes]
+        .join('\n')
+        .toLowerCase()
+        .includes(query),
+    );
   });
 
   constructor() {

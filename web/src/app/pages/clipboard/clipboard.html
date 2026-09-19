@@ -67,8 +67,19 @@
       {{ store.skipped() }} item(s) could not be decrypted and were skipped.
     </p>
   }
+  <input
+    class="search"
+    type="search"
+    [ngModel]="search()"
+    (ngModelChange)="search.set($event)"
+    placeholder="Search clipboard…"
+    aria-label="Search clipboard"
+  />
+  @if (filtered().length === 0) {
+    <p class="muted">No items match “{{ search() }}”.</p>
+  }
   <ul class="items">
-    @for (item of store.items(); track item.id) {
+    @for (item of filtered(); track item.id) {
       <li>
         <div class="content">
           <span class="preview">{{ item.text }}</span>
