@@ -1,6 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ClipboardCopyService } from '../../core/clipboard-copy.service';
+import { DEFAULT_PASSWORD_OPTIONS, generatePassword } from '../../core/password-generator';
 import { SecretsStore, type SecretEntry, type SecretFields } from '../../core/secrets-store';
 
 const EMPTY_FORM: SecretFields = { title: '', username: '', password: '', url: '', notes: '' };
@@ -131,6 +132,18 @@ export class Secrets {
     } catch {
       this.error.set('Could not copy to the clipboard.');
     }
+  }
+
+  protected generatePassword(): void {
+    this.form.password = generatePassword(DEFAULT_PASSWORD_OPTIONS);
+    // Reveal so the user can see what was generated.
+    this.showFormPassword.set(true);
+  }
+
+  protected readonly showFormPassword = signal(false);
+
+  protected toggleFormPassword(): void {
+    this.showFormPassword.update((v) => !v);
   }
 
   protected async copyPassword(entry: SecretEntry): Promise<void> {
