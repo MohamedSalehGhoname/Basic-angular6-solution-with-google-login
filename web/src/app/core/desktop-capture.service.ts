@@ -60,6 +60,7 @@ declare global {
 }
 
 const ENABLED_KEY = 'clipsync.desktop.capture';
+const CAPTURE_ALL_KEY = 'clipsync.desktop.captureAll';
 const MAX_BUFFER = 20;
 /** How many items the overlay lists, and how long each text preview runs. */
 const PICKER_MAX_ITEMS = 60;
@@ -84,6 +85,14 @@ export class DesktopCaptureService {
   private readonly _enabled = signal(this.readEnabled());
   readonly enabled = this._enabled.asReadonly();
 
+  private readonly _captureAll = signal(this.readCaptureAll());
+  /**
+   * Also capture passwords: copies password managers mark as private and
+   * text that looks like a secret. On by default (owner's choice); they are
+   * encrypted like every other item.
+   */
+  readonly captureAll = this._captureAll.asReadonly();
+
   /** Captures that arrived while the vault was locked, flushed on unlock. */
   private buffer: CapturedPayload[] = [];
 
@@ -92,6 +101,7 @@ export class DesktopCaptureService {
       return;
     }
     this.desktop.setCaptureEnabled(this._enabled());
+    this.desktop.setCaptureSecrets(this._captureAll());
 
     this.desktop.onCaptured((payload) => void this.handleCapture(payload));
     // The tray menu can ask to toggle capture; keep our state authoritative.
@@ -174,6 +184,24 @@ export class DesktopCaptureService {
       localStorage.setItem(ENABLED_KEY, JSON.stringify(enabled));
     } catch {
       // Preference only.
+    }
+  }
+
+  setCaptureAll(captureAll: boolean): void {
+    this._captureAll.set(captureAll);
+    this.desktop?.setCaptureSecrets(captureAll);
+    try {
+      localStorage.setItem(CAPTURE_ALL_KEY, JSON.stringify(captureAll));
+    } catch {
+      // Preference only.
+    }
+  }
+
+  private readCaptureAll(): boolean {
+    try {
+      return localStorage.getItem(CAPTURE_ALL_KEY) !== 'false';
+    } catch {
+      return true;
     }
   }
 

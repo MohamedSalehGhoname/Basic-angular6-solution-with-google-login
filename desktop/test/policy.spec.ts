@@ -72,10 +72,24 @@ describe('evaluateCapture', () => {
     });
   });
 
-  it('skips values the OS marks as excluded', () => {
+  it('skips values the OS marks as excluded unless capturing everything', () => {
     expect(
       evaluateCapture(input({ text: 'secret', formats: ['CanIncludeInClipboardHistory'] })),
     ).toEqual({ action: 'skip', reason: 'excluded' });
+    expect(
+      evaluateCapture(
+        input({
+          text: 'Tr0ub4dor&3-horse!battery',
+          formats: ['ExcludeClipboardContentFromMonitorProcessing'],
+          captureSecrets: true,
+        }),
+      ),
+    ).toEqual({ action: 'capture', kind: 'text', potentialSecret: true });
+    expect(
+      evaluateCapture(
+        input({ text: '', image: 'data:image/png;base64,AA', formats: ['org.nspasteboard.ConcealedType'], captureSecrets: true }),
+      ),
+    ).toEqual({ action: 'capture', kind: 'image' });
   });
 
   it('skips likely secrets by default but captures them when opted in', () => {

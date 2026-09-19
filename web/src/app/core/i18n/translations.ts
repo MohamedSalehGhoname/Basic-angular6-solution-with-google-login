@@ -115,6 +115,10 @@ export const TRANSLATIONS = {
 
     'settings.title': 'Settings',
     'settings.appearance': 'Appearance',
+    'settings.capture': 'Copy capture (this computer)',
+    'settings.captureAll': 'Capture passwords and private copies',
+    'settings.captureAllHint':
+      'Records everything you copy, including passwords from password managers (which ask clipboard tools not to) and text that looks like a password or code. They are encrypted like every other item. Turn off to skip them.',
     'settings.files': 'Sending files',
     'settings.filesIntro':
       'On a computer, right-click any file and choose Send to ▸ Clipboard Sync; on a phone, share it to Clipboard Sync from any app. It becomes available on all your devices. Files are kept for 7 days.',
@@ -265,6 +269,10 @@ export const TRANSLATIONS = {
 
     'settings.title': 'الإعدادات',
     'settings.appearance': 'المظهر',
+    'settings.capture': 'التقاط النسخ (هذا الكمبيوتر)',
+    'settings.captureAll': 'التقاط كلمات السر والنسخ الخاصة',
+    'settings.captureAllHint':
+      'يسجّل كل ما تنسخه، بما فيها كلمات السر من برامج إدارة كلمات السر (التي تطلب من أدوات الحافظة عدم تسجيلها) والنصوص التي تشبه كلمة سر أو كود. تُشفَّر مثل أي عنصر آخر. أوقفه لتخطّيها.',
     'settings.files': 'إرسال الملفات',
     'settings.filesIntro':
       'على الكمبيوتر، اضغط بالزر الأيمن على أي ملف واختر Send to ▸ Clipboard Sync، وعلى الموبايل شاركه إلى Clipboard Sync من أي تطبيق. يصبح متاحًا على كل أجهزتك. تُحفظ الملفات 7 أيام.',

@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { I18nService } from '../../core/i18n/i18n.service';
 import type { Locale } from '../../core/i18n/translations';
 import type { TranslationKey } from '../../core/i18n/translations';
+import { DesktopCaptureService } from '../../core/desktop-capture.service';
 import { FileShareService } from '../../core/file-share.service';
 import { ThemeService, type ThemePreference } from '../../core/theme.service';
 import { VaultService } from '../../core/vault.service';
@@ -18,6 +19,7 @@ export class Settings {
   protected readonly theme = inject(ThemeService);
   protected readonly i18n = inject(I18nService);
   protected readonly files = inject(FileShareService);
+  protected readonly capture = inject(DesktopCaptureService);
 
   protected readonly themeOptions: { value: ThemePreference; labelKey: TranslationKey }[] = [
     { value: 'system', labelKey: 'settings.theme.system' },

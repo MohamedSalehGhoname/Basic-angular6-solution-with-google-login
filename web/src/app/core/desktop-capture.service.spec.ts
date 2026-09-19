@@ -20,7 +20,10 @@ class FakeDesktop {
   setCaptureEnabled(enabled: boolean): void {
     this.enabledFlag = enabled;
   }
-  setCaptureSecrets(): void {}
+  captureAllFlag: boolean | null = null;
+  setCaptureSecrets(enabled: boolean): void {
+    this.captureAllFlag = enabled;
+  }
   emit(text: string): void {
     this.cb?.({ kind: 'text', text, potentialSecret: false });
   }
@@ -67,6 +70,22 @@ describe('DesktopCaptureService', () => {
     expect(service.available).toBe(false);
     service.setEnabled(true); // no throw, no bridge
     expect(service.enabled()).toBe(true);
+  });
+
+  it('captures passwords too by default, and remembers turning that off', () => {
+    const service = inject();
+    expect(service.captureAll()).toBe(true);
+    expect(desktop.captureAllFlag).toBe(true);
+
+    service.setCaptureAll(false);
+    expect(desktop.captureAllFlag).toBe(false);
+    expect(localStorage.getItem('clipsync.desktop.captureAll')).toBe('false');
+  });
+
+  it('starts with password capture off when the user turned it off before', () => {
+    localStorage.setItem('clipsync.desktop.captureAll', 'false');
+    inject();
+    expect(desktop.captureAllFlag).toBe(false);
   });
 
   it('captures into the clipboard store when enabled and unlocked', async () => {

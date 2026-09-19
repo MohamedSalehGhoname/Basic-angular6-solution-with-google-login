@@ -20,6 +20,21 @@
   </label>
 </section>
 
+@if (capture.available) {
+  <section class="card">
+    <h2>{{ i18n.t('settings.capture') }}</h2>
+    <label class="check">
+      <input
+        type="checkbox"
+        [checked]="capture.captureAll()"
+        (change)="capture.setCaptureAll($any($event.target).checked)"
+      />
+      {{ i18n.t('settings.captureAll') }}
+    </label>
+    <p class="muted">{{ i18n.t('settings.captureAllHint') }}</p>
+  </section>
+}
+
 @if (files.canSend) {
   <section class="card">
     <h2>{{ i18n.t('settings.files') }}</h2>

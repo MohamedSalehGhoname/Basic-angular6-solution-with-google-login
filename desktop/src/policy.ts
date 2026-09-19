@@ -17,7 +17,10 @@ export interface PolicyInput {
   previousImage: string | null;
   /** OS/clipboard formats currently present (e.g. from clipboard.availableFormats()). */
   formats: string[];
-  /** When false (the default), values that look like secrets are not captured. */
+  /**
+   * When true, capture everything: values that look like secrets and values
+   * apps mark as private (password managers). When false, skip both.
+   */
   captureSecrets: boolean;
 }
 
@@ -99,7 +102,7 @@ export function evaluateCapture(input: PolicyInput): CaptureDecision {
     if (input.previousText !== null && text === input.previousText) {
       return { action: 'skip', reason: 'unchanged' };
     }
-    if (isExcludedFromHistory(input.formats)) {
+    if (!input.captureSecrets && isExcludedFromHistory(input.formats)) {
       return { action: 'skip', reason: 'excluded' };
     }
     const potentialSecret = looksLikeSecret(text);
@@ -112,7 +115,7 @@ export function evaluateCapture(input: PolicyInput): CaptureDecision {
     if (input.previousImage !== null && input.image === input.previousImage) {
       return { action: 'skip', reason: 'unchanged' };
     }
-    if (isExcludedFromHistory(input.formats)) {
+    if (!input.captureSecrets && isExcludedFromHistory(input.formats)) {
       return { action: 'skip', reason: 'excluded' };
     }
     return { action: 'capture', kind: 'image' };
