@@ -1,4 +1,5 @@
 import { Injectable, effect, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
 import { AuthService } from './auth.service';
 import { ClipboardStore } from './clipboard-store';
 import { VaultService } from './vault.service';
@@ -12,6 +13,7 @@ interface ClipsyncDesktopApi {
   isDesktop: true;
   onCaptured(callback: (payload: CapturedPayload) => void): () => void;
   onToggleCaptureRequested?(callback: () => void): () => void;
+  onShowPicker?(callback: () => void): () => void;
   setCaptureEnabled(enabled: boolean): void;
   setCaptureSecrets(enabled: boolean): void;
 }
@@ -36,6 +38,7 @@ export class DesktopCaptureService {
   private readonly clipboard = inject(ClipboardStore);
   private readonly vault = inject(VaultService);
   private readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
 
   private readonly desktop = window.clipsyncDesktop;
   readonly available = !!this.desktop;
@@ -55,6 +58,8 @@ export class DesktopCaptureService {
     this.desktop.onCaptured((payload) => void this.handleCapture(payload));
     // The tray menu can ask to toggle capture; keep our state authoritative.
     this.desktop.onToggleCaptureRequested?.(() => this.setEnabled(!this._enabled()));
+    // Global hotkey: jump to the clipboard list and focus its search box.
+    this.desktop.onShowPicker?.(() => void this.showPicker());
 
     // Flush anything captured while locked, once the vault is unlocked again.
     effect(() => {
@@ -64,6 +69,15 @@ export class DesktopCaptureService {
         void this.flush(pending);
       }
     });
+  }
+
+  private async showPicker(): Promise<void> {
+    await this.router.navigateByUrl('/');
+    // Focus the search box so the user can filter and pick immediately.
+    setTimeout(() => {
+      const search = document.querySelector<HTMLInputElement>('input.search');
+      search?.focus();
+    }, 120);
   }
 
   setEnabled(enabled: boolean): void {

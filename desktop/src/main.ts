@@ -1,7 +1,19 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { BrowserWindow, Menu, Tray, app, clipboard, ipcMain, nativeImage } from 'electron';
+import {
+  BrowserWindow,
+  Menu,
+  Tray,
+  app,
+  clipboard,
+  globalShortcut,
+  ipcMain,
+  nativeImage,
+} from 'electron';
 import { ClipboardWatcher, type ClipboardSnapshot } from './clipboard-watcher.js';
+
+// Global shortcut that brings up the window on the clipboard list to pick from.
+const PICKER_SHORTCUT = process.env['CLIPSYNC_HOTKEY'] ?? 'CommandOrControl+Shift+V';
 
 // Clipboard formats/types apps set to ask that a value not be recorded; probed
 // via the async clipboard API since it exposes has() rather than a format list.
@@ -181,6 +193,20 @@ function setupTray(): void {
   refreshTrayMenu();
 }
 
+function showPicker(): void {
+  showWindow();
+  // Ask the renderer to route to the clipboard list and focus its search.
+  mainWindow?.webContents.send('clipsync:show-picker');
+}
+
+function setupGlobalShortcut(): void {
+  try {
+    globalShortcut.register(PICKER_SHORTCUT, showPicker);
+  } catch {
+    // The accelerator may be unavailable on this platform; ignore.
+  }
+}
+
 function setupCapture(): void {
   const watcher = new ClipboardWatcher({
     read: readClipboard,
@@ -211,6 +237,7 @@ if (!app.requestSingleInstanceLock()) {
     createWindow();
     setupTray();
     setupCapture();
+    setupGlobalShortcut();
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
@@ -228,5 +255,9 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on('before-quit', () => {
     quitting = true;
+  });
+
+  app.on('will-quit', () => {
+    globalShortcut.unregisterAll();
   });
 }

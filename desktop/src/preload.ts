@@ -21,6 +21,11 @@ const api = {
     ipcRenderer.on('clipsync:request-toggle-capture', listener);
     return () => ipcRenderer.removeListener('clipsync:request-toggle-capture', listener);
   },
+  onShowPicker(callback: () => void): () => void {
+    const listener = () => callback();
+    ipcRenderer.on('clipsync:show-picker', listener);
+    return () => ipcRenderer.removeListener('clipsync:show-picker', listener);
+  },
   setCaptureEnabled(enabled: boolean): void {
     ipcRenderer.send('clipsync:set-enabled', enabled);
   },

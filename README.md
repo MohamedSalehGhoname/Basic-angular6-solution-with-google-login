@@ -134,7 +134,11 @@ The capture policy (`desktop/src/policy.ts`, fully unit-tested) skips:
 
 It runs in the background from a system-tray icon (open the window, toggle
 capture, toggle launch-at-login, or quit), keeps running when the window is
-closed so capture continues, and is single-instance.
+closed so capture continues, and is single-instance. Captured items can be text
+**or images** (copy a screenshot and it is stored, encrypted, as an image
+item). A global hotkey — `Ctrl/Cmd+Shift+V` by default, overridable with
+`CLIPSYNC_HOTKEY` — brings the window up on the clipboard list with the search
+focused, to pick and copy quickly.
 
 ```bash
 cd desktop
