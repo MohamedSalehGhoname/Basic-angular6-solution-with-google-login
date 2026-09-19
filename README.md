@@ -158,13 +158,16 @@ npm install
 npm test
 # Run the shell against the dev web server:
 CLIPSYNC_WEB_URL=http://localhost:4200 npm start
-# Build a self-contained, installable app (bundles the built web client):
-npm run dist        # → release/ (electron-builder; mac dmg/zip, win nsis, linux AppImage)
+# Build the Windows installer (x64; dist:arm64 for ARM PCs):
+npm run dist        # → release/ClipboardSync-Setup-<version>-x64.exe
 ```
 
-`npm run dist` first builds the web client and copies it in (`bundle:web`), so
-the packaged app has no external dependency. `CLIPSYNC_WEB_URL` overrides the
-bundled web app during development.
+The installed app loads the web client from the hosted server
+(https://ghoclipboard.ghonameservices.com), so it always runs the current
+version and shares the site's saved settings; without a connection it shows
+an offline notice and retries. `CLIPSYNC_WEB_URL` points it at a dev server
+instead. It installs per user (no admin), is unsigned (SmartScreen asks once),
+and keeps its data apart from a development run.
 
 Runtime note: the capture decision logic and the renderer bridge are covered
 by unit tests, but launching the Electron GUI and producing installers require

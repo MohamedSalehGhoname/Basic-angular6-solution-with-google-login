@@ -1,34 +1,55 @@
 {
   "name": "clipsync-desktop",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "private": true,
   "description": "Desktop client for Clipboard Sync: watches the OS clipboard and captures items into the encrypted vault.",
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc",
     "start": "npm run build && electron .",
-    "bundle:web": "node scripts/bundle-web.mjs",
-    "dist": "npm run build && npm run bundle:web && electron-builder",
+    "dist": "npm run build && electron-builder --win --x64",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "dist:arm64": "npm run build && electron-builder --win --arm64"
   },
   "build": {
-    "appId": "com.clipsync.desktop",
+    "appId": "com.ghonametech.ghoclipboard",
     "productName": "Clipboard Sync",
-    "files": ["dist/**/*", "assets/**/*", "web/**/*", "package.json"],
+    "files": [
+      "dist/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
     "directories": {
       "output": "release"
     },
     "mac": {
       "category": "public.app-category.productivity",
-      "target": ["dmg", "zip"]
+      "target": [
+        "dmg",
+        "zip"
+      ]
     },
     "win": {
-      "target": ["nsis"]
+      "target": [
+        "nsis"
+      ],
+      "icon": "assets/icon.ico"
     },
     "linux": {
-      "target": ["AppImage"],
+      "target": [
+        "AppImage"
+      ],
       "category": "Utility"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Clipboard Sync",
+      "artifactName": "ClipboardSync-Setup-${version}-${arch}.${ext}"
     }
   },
   "devDependencies": {
@@ -37,5 +58,6 @@
     "electron-builder": "^25.1.8",
     "typescript": "^7.0.2",
     "vitest": "^5.0.1"
-  }
+  },
+  "productName": "Clipboard Sync"
 }

@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import {
@@ -42,6 +42,11 @@ interface PickerItem {
 
 /** The deployed web app, used when neither a dev URL nor a bundled build is set. */
 const HOSTED_WEB_URL = 'https://ghoclipboard.ghonameservices.com';
+
+/** Multi-size .ico on Windows (crisp in the tray and taskbar), PNG elsewhere. */
+function appIcon(): string {
+  return join(__dirname, '..', 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png');
+}
 
 const PICKER_WIDTH = 380;
 const PICKER_HEIGHT = 480;
@@ -160,19 +165,26 @@ async function readClipboard(): Promise<ClipboardSnapshot> {
   return { text, image, formats: present.filter((marker): marker is string => marker !== null) };
 }
 
-function resolveWebEntry(): string | null {
-  // Dev: point at the Angular dev server. Prod: the built web app bundled in.
-  const devUrl = process.env['CLIPSYNC_WEB_URL'];
-  if (devUrl) {
-    return devUrl;
-  }
-  const packaged = join(__dirname, '..', 'web', 'index.html');
-  if (existsSync(packaged)) {
-    return packaged;
-  }
-  // An unpackaged run without the env var (e.g. started from Explorer's
-  // "Send to") uses the hosted web app.
-  return app.isPackaged ? null : HOSTED_WEB_URL;
+/**
+ * The web app the window shows: a dev server when CLIPSYNC_WEB_URL is set,
+ * otherwise the hosted one. The installed app loads it from the server
+ * rather than from bundled files, so it is always the current version and
+ * its origin (and so its saved access key and settings) matches the site.
+ */
+function resolveWebEntry(): string {
+  return process.env['CLIPSYNC_WEB_URL'] || HOSTED_WEB_URL;
+}
+
+const RETRY_OFFLINE_MS = 10_000;
+
+/** Shown when the web app cannot be reached; the window retries on its own. */
+function offlinePage(): string {
+  const html = `<!doctype html><meta charset="utf-8"><title>Clipboard Sync</title>
+<body style="font-family:Segoe UI,system-ui,sans-serif;background:#0f1216;color:#e6e8eb;
+display:grid;place-items:center;height:100vh;margin:0;text-align:center">
+<div><h2>Clipboard Sync</h2><p>Can't reach the server. Check your internet connection.</p>
+<p style="color:#8a929c">Trying again automatically…</p></div></body>`;
+  return 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
 }
 
 function createWindow(): void {
@@ -180,7 +192,7 @@ function createWindow(): void {
     width: 960,
     height: 760,
     show: true,
-    icon: join(__dirname, '..', 'assets', 'icon.png'),
+    icon: appIcon(),
     webPreferences: {
       preload: join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -209,21 +221,19 @@ function createWindow(): void {
   });
 
   const entry = resolveWebEntry();
-  if (!entry) {
-    void mainWindow.loadURL(
-      'data:text/html,' +
-        encodeURIComponent(
-          '<h1>Clipboard Sync</h1><p>Set CLIPSYNC_WEB_URL to the web app ' +
-            '(e.g. http://localhost:4200) or bundle the built web app.</p>',
-        ),
-    );
-    return;
-  }
-  if (entry.startsWith('http')) {
-    void mainWindow.loadURL(entry);
-  } else {
-    void mainWindow.loadFile(entry);
-  }
+  let retry: NodeJS.Timeout | null = null;
+  mainWindow.webContents.on('did-fail-load', (_event, code, _description, url, isMainFrame) => {
+    // -3 is an aborted navigation (e.g. a redirect), not a failure.
+    if (!isMainFrame || code === -3 || url.startsWith('data:')) {
+      return;
+    }
+    void mainWindow?.loadURL(offlinePage());
+    if (retry) {
+      clearTimeout(retry);
+    }
+    retry = setTimeout(() => void mainWindow?.loadURL(entry), RETRY_OFFLINE_MS);
+  });
+  void mainWindow.loadURL(entry);
 }
 
 function showWindow(): void {
@@ -289,7 +299,7 @@ function refreshTrayMenu(): void {
 }
 
 function setupTray(): void {
-  const image = nativeImage.createFromPath(join(__dirname, '..', 'assets', 'icon.png'));
+  const image = nativeImage.createFromPath(appIcon());
   tray = new Tray(image);
   tray.setToolTip('Clipboard Sync');
   tray.on('click', showWindow);
@@ -592,6 +602,12 @@ function setupCapture(): void {
   });
 }
 
+// A development run keeps its own data folder (and single-instance lock), so
+// it never collides with an installed "Clipboard Sync" on the same machine.
+if (!app.isPackaged) {
+  app.setPath('userData', join(app.getPath('appData'), 'clipsync-desktop'));
+}
+
 // A second launch focuses the existing window instead of starting again.
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -606,6 +622,11 @@ if (!app.requestSingleInstanceLock()) {
       showWindow();
     }
   });
+
+  // Lets Windows attribute notifications and the taskbar to the installed app.
+  if (process.platform === 'win32') {
+    app.setAppUserModelId('com.ghonametech.ghoclipboard');
+  }
 
   app.whenReady().then(() => {
     createWindow();
