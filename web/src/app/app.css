@@ -6,6 +6,6 @@ main {
 
 @media (max-width: 640px) {
   main {
-    padding: 1.25rem 1rem 3rem;
+    padding: 0.9rem 0.85rem 2.5rem;
   }
 }

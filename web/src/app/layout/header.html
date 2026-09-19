@@ -16,6 +16,19 @@
   </div>
 
   <div class="right">
+    @if (vault.status() === 'unlocked') {
+      <button
+        type="button"
+        class="icon-btn"
+        [class.spinning]="refreshing()"
+        (click)="refresh()"
+        [disabled]="refreshing()"
+        [attr.aria-label]="i18n.t('header.refresh')"
+        [title]="i18n.t('header.refresh')"
+      >
+        ⟳
+      </button>
+    }
     <button
       type="button"
       class="icon-btn"

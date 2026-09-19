@@ -56,6 +56,26 @@ describe('ClipboardStore', () => {
     expect(syncApi.items.size).toBe(2);
   });
 
+  it('keeps new items forever by default', async () => {
+    const entry = await store.add('keep me');
+    expect(store.ttlMs()).toBeNull();
+    expect(entry!.expiresAt).toBeNull();
+  });
+
+  it('picks up items that reached the server without a live event on refresh', async () => {
+    await store.load();
+    await store.add('mine');
+    // Another device's write whose WebSocket event never arrived.
+    const blob = await vault.encryptItem(
+      JSON.stringify({ text: 'from phone', device: 'Phone', copiedAt: Date.now() + 1000, expiresAt: null }),
+    );
+    syncApi.items.set('remote-1', { blob, createdAt: Date.now() + 1000 });
+    expect(store.items().map((item) => item.text)).toEqual(['mine']);
+
+    await store.refresh();
+    expect(store.items().map((item) => item.text)).toEqual(['from phone', 'mine']);
+  });
+
   it('ignores empty input', async () => {
     expect(await store.add('   ')).toBeNull();
     expect(store.items()).toEqual([]);

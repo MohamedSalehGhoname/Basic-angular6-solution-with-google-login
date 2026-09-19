@@ -240,3 +240,10 @@ a:focus-visible {
   white-space: nowrap;
   border: 0;
 }
+
+/* Phones: a denser layout (everything is sized in rem). */
+@media (max-width: 640px) {
+  html {
+    font-size: 14px;
+  }
+}

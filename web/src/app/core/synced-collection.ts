@@ -156,6 +156,26 @@ export abstract class SyncedCollection<T extends object> {
     this.connectSocket();
   }
 
+  /** Whether this collection has been loaded for the current user. */
+  get isLoaded(): boolean {
+    return this.loadedUid !== null;
+  }
+
+  /**
+   * Re-reads everything from the server and reconnects live updates, for a
+   * manual refresh or when the app comes back to the foreground. Collections
+   * that were never loaded are left alone.
+   */
+  async refresh(): Promise<void> {
+    if (this.loadedUid === null) {
+      return;
+    }
+    this.disconnect?.();
+    this.disconnect = null;
+    this.loadedUid = null;
+    await this.load();
+  }
+
   /** Hook for per-collection preferences to load before items. */
   protected async onBeforeLoad(_uid: string): Promise<void> {}
 

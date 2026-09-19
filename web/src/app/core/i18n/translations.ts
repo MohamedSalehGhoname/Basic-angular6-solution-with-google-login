@@ -8,6 +8,7 @@ export const TRANSLATIONS = {
     'nav.secrets': 'Secrets',
     'nav.settings': 'Settings',
     'header.lock': 'Lock',
+    'header.refresh': 'Refresh',
     'header.signOut': 'Sign out',
     'header.theme': 'Theme',
 
@@ -179,6 +180,7 @@ export const TRANSLATIONS = {
     'nav.secrets': 'الأسرار',
     'nav.settings': 'الإعدادات',
     'header.lock': 'قفل',
+    'header.refresh': 'تحديث',
     'header.signOut': 'تسجيل الخروج',
     'header.theme': 'المظهر',
 
