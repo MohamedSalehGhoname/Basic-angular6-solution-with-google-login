@@ -2,7 +2,8 @@
   "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
   "version": 1,
   "cli": {
-    "packageManager": "npm"
+    "packageManager": "npm",
+    "analytics": false
   },
   "newProjectRoot": "projects",
   "projects": {
@@ -42,7 +43,13 @@
                   "maximumError": "10kB"
                 }
               ],
-              "outputHashing": "all"
+              "outputHashing": "all",
+              "fileReplacements": [
+                {
+                  "replace": "src/app/sync.config.ts",
+                  "with": "src/app/sync.config.production.ts"
+                }
+              ]
             },
             "development": {
               "optimization": false,

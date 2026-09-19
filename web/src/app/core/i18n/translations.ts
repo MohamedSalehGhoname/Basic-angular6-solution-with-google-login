@@ -13,6 +13,8 @@ export const TRANSLATIONS = {
 
     'login.tagline': 'End-to-end encrypted clipboard across your devices.',
     'login.google': 'Sign in with Google',
+    'login.accessKey': 'Access key',
+    'login.accessKeyRejected': 'That access key was not accepted. Enter it again.',
 
     'unlock.checking': 'Checking for an existing vault…',
     'unlock.create.title': 'Create your vault',
@@ -57,6 +59,20 @@ export const TRANSLATIONS = {
     'clipboard.delete': 'Delete',
     'clipboard.expires': 'expires {d}',
     'clipboard.confirmClear': 'Delete all clipboard items? This cannot be undone.',
+    'clipboard.download': 'Download',
+    'clipboard.encryptedFile': 'Encrypted',
+
+    'files.sending': 'Sending {name}…',
+    'files.downloading': 'Downloading {name}…',
+    'files.waitingUnlock': 'Unlock your vault to send {name}.',
+    'files.sent': 'Sent to your clipboard: {name}',
+    'files.dismiss': 'Dismiss',
+    'files.error.notConfigured': 'File sharing is not set up on the sync server.',
+    'files.error.server': 'The server could not handle the file. Try again.',
+    'files.error.transfer': 'The transfer failed. Check your connection and try again.',
+    'files.error.empty': 'Empty files cannot be sent.',
+    'files.error.decrypt': 'The file could not be decrypted — it may be damaged.',
+    'files.error.tooLarge': 'This file is too large to decrypt in a browser. Use the desktop app.',
     'ttl.1h': '1 hour',
     'ttl.1d': '1 day',
     'ttl.1w': '1 week',
@@ -97,6 +113,12 @@ export const TRANSLATIONS = {
 
     'settings.title': 'Settings',
     'settings.appearance': 'Appearance',
+    'settings.files': 'Sending files',
+    'settings.filesIntro':
+      'Right-click any file in Explorer and choose “Send to Clipboard Sync” to make it available on all your devices. Files are kept for 7 days.',
+    'settings.filesEncrypt': 'Encrypt files before sending (slower)',
+    'settings.filesEncryptHint':
+      'Only your devices can open them. Turn off to send files as-is, which is faster but lets the storage service see them.',
     'settings.theme.system': 'system',
     'settings.theme.light': 'light',
     'settings.theme.dark': 'dark',
@@ -140,6 +162,8 @@ export const TRANSLATIONS = {
 
     'login.tagline': 'حافظة مشفّرة من طرف إلى طرف عبر كل أجهزتك.',
     'login.google': 'تسجيل الدخول بجوجل',
+    'login.accessKey': 'مفتاح الدخول',
+    'login.accessKeyRejected': 'مفتاح الدخول غير مقبول. أدخله مرة أخرى.',
 
     'unlock.checking': 'جارٍ التحقق من وجود خزنة…',
     'unlock.create.title': 'أنشئ خزنتك',
@@ -184,6 +208,20 @@ export const TRANSLATIONS = {
     'clipboard.delete': 'حذف',
     'clipboard.expires': 'ينتهي {d}',
     'clipboard.confirmClear': 'حذف كل عناصر الحافظة؟ لا يمكن التراجع.',
+    'clipboard.download': 'تنزيل',
+    'clipboard.encryptedFile': 'مشفّر',
+
+    'files.sending': 'جارٍ إرسال {name}…',
+    'files.downloading': 'جارٍ تنزيل {name}…',
+    'files.waitingUnlock': 'افتح خزنتك لإرسال {name}.',
+    'files.sent': 'أُرسل إلى حافظتك: {name}',
+    'files.dismiss': 'إخفاء',
+    'files.error.notConfigured': 'مشاركة الملفات غير مفعّلة على خادم المزامنة.',
+    'files.error.server': 'تعذّر على الخادم معالجة الملف. حاول مرة أخرى.',
+    'files.error.transfer': 'فشل النقل. تحقّق من اتصالك وحاول مرة أخرى.',
+    'files.error.empty': 'لا يمكن إرسال ملف فارغ.',
+    'files.error.decrypt': 'تعذّر فكّ تشفير الملف — ربما يكون تالفًا.',
+    'files.error.tooLarge': 'الملف أكبر من أن يُفكّ تشفيره في المتصفح. استخدم تطبيق سطح المكتب.',
     'ttl.1h': 'ساعة',
     'ttl.1d': 'يوم',
     'ttl.1w': 'أسبوع',
@@ -223,6 +261,12 @@ export const TRANSLATIONS = {
 
     'settings.title': 'الإعدادات',
     'settings.appearance': 'المظهر',
+    'settings.files': 'إرسال الملفات',
+    'settings.filesIntro':
+      'اضغط بالزر الأيمن على أي ملف في المستكشف واختر “Send to Clipboard Sync” ليصبح متاحًا على كل أجهزتك. تُحفظ الملفات 7 أيام.',
+    'settings.filesEncrypt': 'تشفير الملفات قبل الإرسال (أبطأ)',
+    'settings.filesEncryptHint':
+      'لا يفتحها إلا أجهزتك. أوقفه لإرسال الملفات كما هي، وهذا أسرع لكن خدمة التخزين تستطيع رؤيتها.',
     'settings.theme.system': 'النظام',
     'settings.theme.light': 'فاتح',
     'settings.theme.dark': 'داكن',

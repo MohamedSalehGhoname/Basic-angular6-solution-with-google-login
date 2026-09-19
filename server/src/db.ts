@@ -46,7 +46,27 @@ export class SyncDb {
       );
       CREATE INDEX IF NOT EXISTS items_by_collection_time
         ON items (uid, collection, created_at DESC);
+      CREATE TABLE IF NOT EXISTS files (
+        file_id    TEXT PRIMARY KEY,
+        uid        TEXT NOT NULL,
+        size_bytes INTEGER NOT NULL,
+        created_at INTEGER NOT NULL
+      );
     `);
+  }
+
+  /** Records which user a stored file belongs to; storage ids are global. */
+  addFile(uid: string, fileId: string, sizeBytes: number): void {
+    this.db
+      .prepare('INSERT INTO files (file_id, uid, size_bytes, created_at) VALUES (?, ?, ?, ?)')
+      .run(fileId, uid, sizeBytes, Date.now());
+  }
+
+  fileOwner(fileId: string): string | null {
+    const row = this.db.prepare('SELECT uid FROM files WHERE file_id = ?').get(fileId) as
+      | { uid: string }
+      | undefined;
+    return row?.uid ?? null;
   }
 
   getVault(uid: string): VaultRecord | null {

@@ -170,6 +170,37 @@ Runtime note: the capture decision logic and the renderer bridge are covered
 by unit tests, but launching the Electron GUI and producing installers require
 a desktop session with platform build tools and are not exercised in CI.
 
+## Sending files to the clipboard
+
+On Windows, right-click any file(s) → **Send to ▸ Clipboard Sync** (the new
+Windows 11 menu only shows classic entries under "Show more options", so the
+app also installs a *Send to* shortcut). The file becomes a clipboard item on
+every signed-in device, with a **Download** button.
+
+- Files live in GTDrive's append-only files API; the sync server holds the
+  GTDrive key (`GTDRIVE_URL`, `GTDRIVE_API_KEY`) and hands devices short-lived
+  upload/download URLs. Bytes go device ↔ storage directly.
+- **Encrypt files before sending** (Settings, on by default): each file gets a
+  fresh AES-256 key, is encrypted on the device in 1 MiB chunks (`CSF1`, see
+  `desktop/src/file-crypto.ts`), and storage sees only a random name and
+  ciphertext. The key rides inside the (already encrypted) clipboard item.
+  Turned off, files are sent as-is — faster, but storage can read them.
+- Deleting the item does not delete the stored file (the API is
+  append-only); the GTDrive client's retention removes it.
+
+## Deployment
+
+Hosted at <https://ghoclipboard.ghonameservices.com>: one Docker container
+(sync server + built web app from the same origin) on the Education VPS,
+bound to `127.0.0.1:5780` behind the Cloudflare tunnel. Redeploy with
+`bash deploy/deploy.sh`.
+
+Server settings live only in `/opt/ghoclipboard/.env` on the VPS:
+`GTDRIVE_URL`, `GTDRIVE_API_KEY`, and — until Firebase sign-in is configured —
+`INSECURE_DEV_AUTH=1` with `ACCESS_KEY`, a shared secret every device enters
+once on the login page (the production web build sets `accessKeyRequired`).
+Remove both together when real sign-in lands.
+
 ## Mobile client
 
 The `mobile/` package wraps the same web client as a native iOS/Android app

@@ -6,10 +6,23 @@ interface ClipboardPayload {
   text: string;
   /** Present for image items: a `data:image/…;base64,…` URL. */
   image?: string;
+  /** Present for file items (then `text` is the file name). */
+  file?: ClipboardFile;
   device: string;
   copiedAt: number;
   /** Epoch ms after which the item self-destructs; null/absent = keep forever. */
   expiresAt?: number | null;
+}
+
+/** A file sent to the clipboard, stored in GTDrive. */
+export interface ClipboardFile {
+  /** Storage id (`fil_…`). */
+  id: string;
+  name: string;
+  /** Original size in bytes. */
+  size: number;
+  /** Base64 AES-256 key when the file was encrypted; absent when sent as-is. */
+  key?: string;
 }
 
 export type ClipboardEntry = Entry<ClipboardPayload>;
@@ -76,6 +89,19 @@ export class ClipboardStore extends SyncedCollection<ClipboardPayload> {
     return this.create({
       text: options.label ?? 'Image',
       image,
+      device: options.device ?? 'Web',
+      copiedAt: now,
+      expiresAt: ttl === null ? null : now + ttl,
+    });
+  }
+
+  /** Adds a file that has been uploaded to storage. */
+  async addFile(file: ClipboardFile, options: { device?: string } = {}): Promise<ClipboardEntry> {
+    const ttl = this._ttlMs();
+    const now = Date.now();
+    return this.create({
+      text: file.name,
+      file,
       device: options.device ?? 'Web',
       copiedAt: now,
       expiresAt: ttl === null ? null : now + ttl,

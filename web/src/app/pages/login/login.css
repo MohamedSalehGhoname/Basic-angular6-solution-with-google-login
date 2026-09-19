@@ -48,3 +48,27 @@
   color: var(--danger);
   font-size: 0.875rem;
 }
+
+.access-key {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0 0 1rem;
+  text-align: start;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.access-key input {
+  padding: 0.55rem 0.7rem;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.access-key input:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}

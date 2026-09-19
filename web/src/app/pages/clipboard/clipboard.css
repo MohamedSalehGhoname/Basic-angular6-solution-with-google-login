@@ -193,6 +193,69 @@ button.ghost:hover:not(:disabled) {
   gap: 0.4rem;
 }
 
+.items .file-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.items .file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+
+.items .file-size {
+  flex-shrink: 0;
+  color: var(--text-subtle);
+  font-size: 0.8rem;
+}
+
+.items .badge {
+  flex-shrink: 0;
+  padding: 0.05rem 0.45rem;
+  font-size: 0.72rem;
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-radius: 999px;
+}
+
+.transfers {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.transfers li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0.8rem;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+}
+
+.transfers li.failed {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.transfers .transfer-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.transfers progress {
+  flex-shrink: 0;
+  width: 8rem;
+  accent-color: var(--primary);
+}
+
 @media (max-width: 640px) {
   .items li {
     flex-direction: column;

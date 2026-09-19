@@ -3,6 +3,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ClipboardStore, TTL_OPTIONS, type ClipboardEntry } from '../../core/clipboard-store';
 import { DesktopCaptureService } from '../../core/desktop-capture.service';
+import { FileShareService } from '../../core/file-share.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import type { TranslationKey } from '../../core/i18n/translations';
 import { NativeBridge } from '../../core/native-bridge.service';
@@ -18,6 +19,22 @@ export class Clipboard {
   protected readonly desktop = inject(DesktopCaptureService);
   protected readonly i18n = inject(I18nService);
   protected readonly native = inject(NativeBridge);
+  protected readonly files = inject(FileShareService);
+
+  protected formatSize(bytes: number): string {
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let value = bytes;
+    let unit = 0;
+    while (value >= 1024 && unit < units.length - 1) {
+      value /= 1024;
+      unit += 1;
+    }
+    return `${value.toFixed(unit === 0 || value >= 10 ? 0 : 1)} ${units[unit]}`;
+  }
+
+  protected percent(done: number, total: number): number {
+    return total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+  }
 
   protected readonly ttlOptions = TTL_OPTIONS;
 
@@ -88,6 +105,10 @@ export class Clipboard {
 
   protected async copy(entry: ClipboardEntry): Promise<void> {
     this.error.set(null);
+    if (entry.file) {
+      await this.files.download(entry.file);
+      return;
+    }
     try {
       if (entry.image) {
         await this.native.copyImage(entry.image);

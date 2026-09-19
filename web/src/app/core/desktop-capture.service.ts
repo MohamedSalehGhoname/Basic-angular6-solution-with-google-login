@@ -26,6 +26,31 @@ interface ClipsyncDesktopApi {
   writeClipboard?(payload: { text?: string; image?: string; paste?: boolean }): void;
   setCaptureEnabled(enabled: boolean): void;
   setCaptureSecrets(enabled: boolean): void;
+  // File sending (see FileShareService); absent on older desktop builds.
+  onFileSend?(callback: (request: FileSendRequest) => void): Promise<() => void>;
+  uploadFile?(requestId: string, uploadUrl: string, key: string | null): Promise<void>;
+  forgetFile?(requestId: string): void;
+  downloadFile?(args: {
+    id: string;
+    downloadUrl: string;
+    name: string;
+    key: string | null;
+  }): Promise<string>;
+  onFileProgress?(callback: (progress: FileProgress) => void): () => void;
+  showWindow?(): void;
+}
+
+/** A file the user sent from Explorer's right-click menu. */
+export interface FileSendRequest {
+  requestId: string;
+  name: string;
+  sizeBytes: number;
+}
+
+export interface FileProgress {
+  id: string;
+  done: number;
+  total: number;
 }
 
 declare global {
@@ -96,6 +121,7 @@ export class DesktopCaptureService {
   private pickerItems(): PickerItem[] {
     return this.clipboard
       .items()
+      .filter((entry) => !entry.file)
       .slice(0, PICKER_MAX_ITEMS)
       .map((entry) =>
         entry.image

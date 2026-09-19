@@ -1,8 +1,11 @@
 import cors from '@fastify/cors';
 import websocket from '@fastify/websocket';
-import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
+import { Readable } from 'node:stream';
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import type { TokenVerifier } from './auth.js';
 import { SyncDb } from './db.js';
+import { FileStoreError, type FileStore } from './gtdrive.js';
 import { SyncHub } from './hub.js';
 
 export interface AppOptions {
@@ -13,6 +16,14 @@ export interface AppOptions {
   /** Allowed CORS origin(s); defaults to reflecting the request origin. */
   corsOrigin?: string | string[] | boolean;
   logger?: boolean;
+  /** Storage for files sent to the clipboard; the file routes 503 without it. */
+  files?: FileStore;
+  /**
+   * Shared secret every client must present (x-access-key header, or the
+   * accessKey query on the WebSocket). A stopgap that keeps a public
+   * deployment closed while sign-in is still the insecure dev mode.
+   */
+  accessKey?: string;
 }
 
 declare module 'fastify' {
@@ -73,6 +84,45 @@ const collectionParamsSchema = {
   },
 } as const;
 
+// GTDrive's own upload limit.
+const MAX_FILE_BYTES = 5 * 1024 ** 3;
+
+const fileBodySchema = {
+  type: 'object',
+  required: ['sizeBytes', 'encrypted'],
+  additionalProperties: false,
+  properties: {
+    sizeBytes: { type: 'integer', minimum: 1, maximum: MAX_FILE_BYTES },
+    encrypted: { type: 'boolean' },
+    // Only for files sent as-is; an encrypted file's name stays in the
+    // encrypted clipboard item and storage sees a random one.
+    name: { type: 'string', maxLength: 255 },
+  },
+} as const;
+
+const fileParamsSchema = {
+  type: 'object',
+  required: ['fileId'],
+  properties: {
+    fileId: { type: 'string', pattern: '^fil_[A-Za-z0-9_-]{1,64}$' },
+  },
+} as const;
+
+/** GTDrive accepts letters, digits, `.`, `_` and `-` in names. */
+function storageName(name: string | undefined): string {
+  const cleaned = (name ?? '')
+    .normalize('NFKD')
+    .replace(/[^A-Za-z0-9._-]+/g, '_')
+    .replace(/^[._]+/, '')
+    .slice(-120);
+  return cleaned || 'file';
+}
+
+/** Each user's files live under an opaque folder derived from the uid. */
+function storagePath(uid: string): string {
+  return `u/${createHash('sha256').update(uid).digest('hex').slice(0, 24)}`;
+}
+
 const itemParamsSchema = {
   type: 'object',
   required: ['collection', 'id'],
@@ -86,6 +136,19 @@ export interface App {
   fastify: FastifyInstance;
   db: SyncDb;
   hub: SyncHub;
+}
+
+/** Constant-time check of a presented access key against the configured one. */
+function accessKeyMatches(expected: string | undefined, presented: unknown): boolean {
+  if (!expected) {
+    return true;
+  }
+  if (typeof presented !== 'string') {
+    return false;
+  }
+  const a = createHash('sha256').update(expected).digest();
+  const b = createHash('sha256').update(presented).digest();
+  return timingSafeEqual(a, b);
 }
 
 export function buildApp(options: AppOptions): App {
@@ -105,8 +168,8 @@ export function buildApp(options: AppOptions): App {
   // in production.
   fastify.register(cors, {
     origin: options.corsOrigin ?? true,
-    methods: ['GET', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['authorization', 'content-type', 'x-client-id'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['authorization', 'content-type', 'x-client-id', 'x-access-key'],
   });
   fastify.register(websocket);
 
@@ -114,6 +177,9 @@ export function buildApp(options: AppOptions): App {
 
   fastify.register(async (api) => {
     api.addHook('preHandler', async (request, reply) => {
+      if (!accessKeyMatches(options.accessKey, request.headers['x-access-key'])) {
+        return reply.code(403).send({ error: 'Invalid access key', code: 'access_key' });
+      }
       const header = request.headers.authorization;
       const token = header?.startsWith('Bearer ') ? header.slice('Bearer '.length) : null;
       if (!token) {
@@ -182,13 +248,132 @@ export function buildApp(options: AppOptions): App {
         return reply.code(204).send();
       },
     );
+
+    // --- Files sent to the clipboard -------------------------------------
+    // The server hands out storage URLs for the caller's own files only.
+    const fileStore = (reply: FastifyReply): FileStore | null => {
+      if (!options.files) {
+        void reply.code(503).send({ error: 'File sharing is not configured' });
+        return null;
+      }
+      return options.files;
+    };
+    const ownFile = (request: FastifyRequest, reply: FastifyReply): string | null => {
+      const { fileId } = request.params as { fileId: string };
+      if (db.fileOwner(fileId) !== request.uid) {
+        void reply.code(404).send({ error: 'No such file' });
+        return null;
+      }
+      return fileId;
+    };
+    const storageFailed = (reply: FastifyReply, err: unknown) => {
+      fastify.log.warn({ err }, 'file storage call failed');
+      const status = err instanceof FileStoreError && err.status === 403 ? 403 : 502;
+      return reply.code(status).send({ error: 'File storage request failed' });
+    };
+
+    api.post('/files', { schema: { body: fileBodySchema } }, async (request, reply) => {
+      const store = fileStore(reply);
+      if (!store) {
+        return reply;
+      }
+      const { sizeBytes, encrypted, name } = request.body as {
+        sizeBytes: number;
+        encrypted: boolean;
+        name?: string;
+      };
+      const fileName = encrypted
+        ? `${randomUUID().replaceAll('-', '')}.bin`
+        : storageName(name);
+      try {
+        const created = await store.create({ fileName, path: storagePath(request.uid), sizeBytes });
+        db.addFile(request.uid, created.fileId, sizeBytes);
+        return {
+          fileId: created.fileId,
+          uploadUrl: created.uploadUrl,
+          uploadExpiresAt: created.uploadExpiresAt,
+        };
+      } catch (err) {
+        return storageFailed(reply, err);
+      }
+    });
+
+    api.post(
+      '/files/:fileId/uploaded',
+      { schema: { params: fileParamsSchema } },
+      async (request, reply) => {
+        const store = fileStore(reply);
+        const fileId = store && ownFile(request, reply);
+        if (!store || !fileId) {
+          return reply;
+        }
+        try {
+          const confirmed = await store.confirm(fileId);
+          return { fileId, sizeBytes: confirmed.sizeBytes, expiresAt: confirmed.expiresAt };
+        } catch (err) {
+          return storageFailed(reply, err);
+        }
+      },
+    );
+
+    api.get(
+      '/files/:fileId/download',
+      { schema: { params: fileParamsSchema } },
+      async (request, reply) => {
+        const store = fileStore(reply);
+        const fileId = store && ownFile(request, reply);
+        if (!store || !fileId) {
+          return reply;
+        }
+        try {
+          // Only the link: storage's own name and hash stay server-side.
+          const { downloadUrl, expiresAt } = await store.downloadUrl(fileId);
+          return { downloadUrl, expiresAt };
+        } catch (err) {
+          return storageFailed(reply, err);
+        }
+      },
+    );
+
+    // Relays the stored bytes for browsers, which cannot fetch the storage
+    // URL cross-origin to decrypt it. Encrypted files are ciphertext here.
+    api.get(
+      '/files/:fileId/content',
+      { schema: { params: fileParamsSchema } },
+      async (request, reply) => {
+        const store = fileStore(reply);
+        const fileId = store && ownFile(request, reply);
+        if (!store || !fileId) {
+          return reply;
+        }
+        let upstream: Response;
+        try {
+          upstream = await fetch((await store.downloadUrl(fileId)).downloadUrl);
+        } catch (err) {
+          return storageFailed(reply, err);
+        }
+        if (!upstream.ok || !upstream.body) {
+          return storageFailed(reply, new FileStoreError('download failed', upstream.status));
+        }
+        reply.header('content-type', 'application/octet-stream');
+        const length = upstream.headers.get('content-length');
+        if (length) {
+          reply.header('content-length', length);
+        }
+        return reply.send(Readable.fromWeb(upstream.body as never));
+      },
+    );
   }, { prefix: '/api' });
 
   // Browsers cannot set headers on WebSocket upgrades, so auth rides the
   // query string here instead of the Authorization header.
   fastify.register(async (ws) => {
     ws.get('/api/sync', { websocket: true }, async (socket, request) => {
-      const query = request.query as { token?: string; clientId?: string };
+      const query = request.query as { token?: string; clientId?: string; accessKey?: string };
+      if (!accessKeyMatches(options.accessKey, query.accessKey)) {
+        socket.close(4403, 'Invalid access key');
+        return;
+      }
       if (!query.token) {
         socket.close(4401, 'Missing token');
         return;

@@ -20,6 +20,22 @@
   </label>
 </section>
 
+@if (files.canSend) {
+  <section class="card">
+    <h2>{{ i18n.t('settings.files') }}</h2>
+    <p class="muted">{{ i18n.t('settings.filesIntro') }}</p>
+    <label class="check">
+      <input
+        type="checkbox"
+        [checked]="files.encrypt()"
+        (change)="files.setEncrypt($any($event.target).checked)"
+      />
+      {{ i18n.t('settings.filesEncrypt') }}
+    </label>
+    <p class="muted">{{ i18n.t('settings.filesEncryptHint') }}</p>
+  </section>
+}
+
 <section class="card">
   <h2>{{ i18n.t('settings.changePass') }}</h2>
   <p class="muted">{{ i18n.t('settings.changePassIntro') }}</p>

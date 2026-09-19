@@ -46,6 +46,32 @@
   <p class="error" role="alert">{{ message }}</p>
 }
 
+@if (files.transfers().length > 0) {
+  <ul class="transfers" aria-live="polite">
+    @for (transfer of files.transfers(); track transfer.id) {
+      <li [class.failed]="!!transfer.error">
+        <span class="transfer-label">
+          @if (transfer.error) {
+            {{ transfer.name }} — {{ i18n.t(transfer.error) }}
+          } @else if (transfer.waiting) {
+            {{ i18n.t('files.waitingUnlock', { name: transfer.name }) }}
+          } @else {
+            {{ i18n.t(transfer.direction === 'up' ? 'files.sending' : 'files.downloading', { name: transfer.name }) }}
+            <span class="muted">{{ percent(transfer.done, transfer.total) }}%</span>
+          }
+        </span>
+        @if (transfer.error) {
+          <button type="button" class="ghost" (click)="files.dismiss(transfer.id)">
+            {{ i18n.t('files.dismiss') }}
+          </button>
+        } @else if (!transfer.waiting) {
+          <progress [value]="transfer.done" [max]="transfer.total || 1"></progress>
+        }
+      </li>
+    }
+  </ul>
+}
+
 @if (!loading() && !store.online()) {
   <p class="muted">{{ i18n.t('clipboard.offline') }}</p>
 }
@@ -76,7 +102,16 @@
     @for (item of filtered(); track item.id) {
       <li>
         <div class="content">
-          @if (item.image) {
+          @if (item.file; as file) {
+            <span class="preview file-preview">
+              <span class="file-icon" aria-hidden="true">📎</span>
+              <span class="file-name">{{ file.name }}</span>
+              <span class="file-size">{{ formatSize(file.size) }}</span>
+              @if (file.key) {
+                <span class="badge">🔒 {{ i18n.t('clipboard.encryptedFile') }}</span>
+              }
+            </span>
+          } @else if (item.image) {
             <a [href]="item.image" [download]="item.text" target="_blank" rel="noopener" class="img-preview">
               <img [src]="item.image" [alt]="item.text" />
             </a>
@@ -92,9 +127,15 @@
         </div>
         <div class="actions">
           <button type="button" (click)="copy(item)">
-            {{ copiedId() === item.id ? i18n.t('clipboard.copied') : i18n.t('clipboard.copy') }}
+            {{
+              item.file
+                ? i18n.t('clipboard.download')
+                : copiedId() === item.id
+                  ? i18n.t('clipboard.copied')
+                  : i18n.t('clipboard.copy')
+            }}
           </button>
-          @if (native.canShare && !item.image) {
+          @if (native.canShare && !item.image && !item.file) {
             <button type="button" class="ghost" (click)="share(item)">
               {{ i18n.t('clipboard.share') }}
             </button>

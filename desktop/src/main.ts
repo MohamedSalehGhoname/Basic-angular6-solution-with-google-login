@@ -1,6 +1,8 @@
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { stat } from 'node:fs/promises';
+import { basename, join } from 'node:path';
 import {
   BrowserWindow,
   ClipboardItem,
@@ -12,8 +14,23 @@ import {
   ipcMain,
   nativeImage,
   screen,
+  shell,
 } from 'electron';
 import { ClipboardWatcher, type ClipboardSnapshot } from './clipboard-watcher.js';
+import { downloadFile, uploadFile } from './file-transfer.js';
+import {
+  filesFromArgv,
+  registerContextMenu,
+  sendToShortcut,
+  unregisterContextMenu,
+} from './shell-menu.js';
+
+/** A file the user sent from Explorer, waiting for the renderer to upload it. */
+interface FileSendRequest {
+  requestId: string;
+  name: string;
+  sizeBytes: number;
+}
 
 /** A single clipboard entry as shown in the compact picker overlay. */
 interface PickerItem {
@@ -22,6 +39,9 @@ interface PickerItem {
   /** Truncated text, or an image data URL for image items. */
   preview: string;
 }
+
+/** The deployed web app, used when neither a dev URL nor a bundled build is set. */
+const HOSTED_WEB_URL = 'https://ghoclipboard.ghonameservices.com';
 
 const PICKER_WIDTH = 380;
 const PICKER_HEIGHT = 480;
@@ -49,6 +69,32 @@ let mainWindow: BrowserWindow | null = null;
 let pickerWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let quitting = false;
+
+// Files sent from Explorer before the renderer was listening; handed over
+// once it asks, then streamed live. Paths stay in the main process only.
+let pendingFileSends: FileSendRequest[] = [];
+const fileSendPaths = new Map<string, string>();
+let rendererTakesFiles = false;
+
+// Small per-install preferences the main process owns.
+interface ShellSettings {
+  explorerMenu: boolean;
+}
+const settingsPath = (): string => join(app.getPath('userData'), 'shell-settings.json');
+function readShellSettings(): ShellSettings {
+  try {
+    return { explorerMenu: true, ...JSON.parse(readFileSync(settingsPath(), 'utf8')) };
+  } catch {
+    return { explorerMenu: true };
+  }
+}
+function writeShellSettings(settings: ShellSettings): void {
+  try {
+    writeFileSync(settingsPath(), JSON.stringify(settings));
+  } catch {
+    // Preference only.
+  }
+}
 
 // Latest clipboard previews pushed by the (unlocked) main renderer. The picker
 // overlay never decrypts anything itself — it just shows these previews and
@@ -121,7 +167,12 @@ function resolveWebEntry(): string | null {
     return devUrl;
   }
   const packaged = join(__dirname, '..', 'web', 'index.html');
-  return existsSync(packaged) ? packaged : null;
+  if (existsSync(packaged)) {
+    return packaged;
+  }
+  // An unpackaged run without the env var (e.g. started from Explorer's
+  // "Send to") uses the hosted web app.
+  return app.isPackaged ? null : HOSTED_WEB_URL;
 }
 
 function createWindow(): void {
@@ -148,6 +199,13 @@ function createWindow(): void {
   });
   mainWindow.on('closed', () => {
     mainWindow = null;
+    rendererTakesFiles = false;
+  });
+  // A reload drops the renderer's listeners until it asks for files again.
+  mainWindow.webContents.on('did-start-navigation', (details) => {
+    if (details.isMainFrame && !details.isSameDocument) {
+      rendererTakesFiles = false;
+    }
   });
 
   const entry = resolveWebEntry();
@@ -193,6 +251,20 @@ function buildTrayMenu(): Menu {
       checked: pasteOnPick,
       click: (item) => {
         pasteOnPick = item.checked;
+      },
+    },
+    {
+      label: 'Explorer "Send to" menu',
+      type: 'checkbox',
+      checked: readShellSettings().explorerMenu,
+      visible: process.platform === 'win32',
+      click: (item) => {
+        writeShellSettings({ ...readShellSettings(), explorerMenu: item.checked });
+        if (item.checked) {
+          void registerExplorerMenu();
+        } else {
+          void unregisterExplorerMenu();
+        }
       },
     },
     {
@@ -382,6 +454,124 @@ function setupGlobalShortcut(): void {
   }
 }
 
+function sendToLink() {
+  return sendToShortcut(
+    app.getPath('appData'),
+    process.execPath,
+    app.isPackaged ? null : app.getAppPath(),
+  );
+}
+
+/** Adds "Send to ▸ Clipboard Sync" and the classic right-click entry. */
+async function registerExplorerMenu(): Promise<void> {
+  if (process.platform !== 'win32') {
+    return;
+  }
+  const link = sendToLink();
+  // 'create' also overwrites; 'replace' fails when the shortcut is missing.
+  shell.writeShortcutLink(link.path, 'create', {
+    target: link.target,
+    args: link.args,
+    icon: process.execPath,
+    iconIndex: 0,
+    description: 'Send to Clipboard Sync',
+  });
+  await registerContextMenu(process.execPath, app.isPackaged ? null : app.getAppPath());
+}
+
+async function unregisterExplorerMenu(): Promise<void> {
+  if (process.platform !== 'win32') {
+    return;
+  }
+  rmSync(sendToLink().path, { force: true });
+  await unregisterContextMenu();
+}
+
+/** Queues files sent from Explorer (or a second launch) for the renderer. */
+async function receiveFiles(paths: string[]): Promise<void> {
+  for (const path of paths) {
+    try {
+      const info = await stat(path);
+      if (!info.isFile()) {
+        continue;
+      }
+      const request: FileSendRequest = {
+        requestId: randomUUID(),
+        name: basename(path),
+        sizeBytes: info.size,
+      };
+      fileSendPaths.set(request.requestId, path);
+      if (rendererTakesFiles && mainWindow) {
+        mainWindow.webContents.send('clipsync:file-send', request);
+      } else {
+        pendingFileSends.push(request);
+      }
+    } catch {
+      // Vanished or unreadable; nothing to send.
+    }
+  }
+}
+
+function setupFileSharing(): void {
+  if (readShellSettings().explorerMenu) {
+    void registerExplorerMenu();
+  }
+
+  ipcMain.handle('clipsync:take-file-sends', () => {
+    rendererTakesFiles = true;
+    const pending = pendingFileSends;
+    pendingFileSends = [];
+    return pending;
+  });
+
+  // The renderer got a storage URL (and, when encrypting, a fresh per-file
+  // key) from the sync server; stream the file there from disk.
+  ipcMain.handle(
+    'clipsync:upload-file',
+    async (event, args: { requestId: string; uploadUrl: string; key: string | null }) => {
+      const path = fileSendPaths.get(args.requestId);
+      if (!path) {
+        throw new Error('Unknown file');
+      }
+      try {
+        await uploadFile(
+          path,
+          args.uploadUrl,
+          args.key ? Buffer.from(args.key, 'base64') : null,
+          (done, total) =>
+            event.sender.send('clipsync:file-progress', { id: args.requestId, done, total }),
+        );
+      } finally {
+        fileSendPaths.delete(args.requestId);
+      }
+    },
+  );
+
+  ipcMain.on('clipsync:forget-file', (_event, requestId: string) => {
+    fileSendPaths.delete(requestId);
+  });
+
+  ipcMain.handle(
+    'clipsync:download-file',
+    async (
+      event,
+      args: { id: string; downloadUrl: string; name: string; key: string | null },
+    ) => {
+      const saved = await downloadFile(
+        args.downloadUrl,
+        app.getPath('downloads'),
+        args.name,
+        args.key ? Buffer.from(args.key, 'base64') : null,
+        (done, total) => event.sender.send('clipsync:file-progress', { id: args.id, done, total }),
+      );
+      shell.showItemInFolder(saved);
+      return saved;
+    },
+  );
+
+  ipcMain.on('clipsync:show-window', showWindow);
+}
+
 function setupCapture(): void {
   const watcher = new ClipboardWatcher({
     read: readClipboard,
@@ -406,14 +596,25 @@ function setupCapture(): void {
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on('second-instance', showWindow);
+  // A second launch focuses the existing window, unless it only carries files
+  // sent from Explorer — those upload in the background.
+  app.on('second-instance', (_event, argv) => {
+    const files = filesFromArgv(argv);
+    if (files.length > 0) {
+      void receiveFiles(files);
+    } else {
+      showWindow();
+    }
+  });
 
   app.whenReady().then(() => {
     createWindow();
     setupTray();
     setupCapture();
     setupPicker();
+    setupFileSharing();
     setupGlobalShortcut();
+    void receiveFiles(filesFromArgv(process.argv));
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {

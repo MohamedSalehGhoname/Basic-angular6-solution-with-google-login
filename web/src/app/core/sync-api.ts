@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { syncConfig } from '../sync.config';
+import { getAccessKey, rejectAccessKey } from './access-key';
 import { AuthService } from './auth.service';
 
 export interface WrappedKeyRecord {
@@ -21,6 +22,19 @@ export interface RemoteItem {
 }
 
 export type Collection = 'clipboard' | 'secrets';
+
+export interface CreatedFile {
+  fileId: string;
+  uploadUrl: string;
+  uploadExpiresAt: string;
+}
+
+/** A file-route call failed; `status` lets callers tell "not set up" (503) apart. */
+export class FileRequestError extends Error {
+  constructor(readonly status: number) {
+    super(`File request failed with status ${status}`);
+  }
+}
 
 export type SyncEvent =
   | { type: 'vault-updated' }
@@ -79,6 +93,36 @@ export class SyncApi {
   }
 
   /**
+   * Registers a file sent to the clipboard and returns where to upload it.
+   * `sizeBytes` is what will be uploaded (the encrypted size when encrypting);
+   * `name` is only sent for files shared as-is.
+   */
+  async createFile(input: { sizeBytes: number; encrypted: boolean; name?: string }): Promise<CreatedFile> {
+    return this.fileJson<CreatedFile>(await this.request('POST', '/api/files', input));
+  }
+
+  async confirmFile(fileId: string): Promise<void> {
+    await this.fileJson(
+      await this.request('POST', `/api/files/${encodeURIComponent(fileId)}/uploaded`, {}),
+    );
+  }
+
+  /** A short-lived (15 min) direct link to the stored bytes. */
+  async fileDownloadUrl(fileId: string): Promise<string> {
+    const res = await this.request('GET', `/api/files/${encodeURIComponent(fileId)}/download`);
+    return (await this.fileJson<{ downloadUrl: string }>(res)).downloadUrl;
+  }
+
+  /** The stored bytes relayed by the sync server, for in-browser decryption. */
+  async fileContent(fileId: string): Promise<Uint8Array> {
+    const res = await this.request('GET', `/api/files/${encodeURIComponent(fileId)}/content`);
+    if (!res.ok) {
+      throw new FileRequestError(res.status);
+    }
+    return new Uint8Array(await res.arrayBuffer());
+  }
+
+  /**
    * Opens the event stream, reconnecting with backoff until the returned
    * disconnect function is called. `onStatus` reports live connectivity.
    */
@@ -107,7 +151,8 @@ export class SyncApi {
         const token = await this.auth.idToken();
         const url =
           this.base.replace(/^http/, 'ws') +
-          `/api/sync?token=${encodeURIComponent(token)}&clientId=${CLIENT_ID}`;
+          `/api/sync?token=${encodeURIComponent(token)}&clientId=${CLIENT_ID}` +
+          (getAccessKey() ? `&accessKey=${encodeURIComponent(getAccessKey()!)}` : '');
         socket = new WebSocket(url);
         socket.onopen = () => {
           attempt = 0;
@@ -120,7 +165,16 @@ export class SyncApi {
             // Ignore malformed frames.
           }
         };
-        socket.onclose = scheduleRetry;
+        socket.onclose = (event) => {
+          if (event.code === 4403) {
+            // Wrong access key: retrying cannot help until it is re-entered.
+            closed = true;
+            onStatus?.(false);
+            this.accessKeyFailed();
+            return;
+          }
+          scheduleRetry();
+        };
       } catch {
         scheduleRetry();
       }
@@ -135,15 +189,37 @@ export class SyncApi {
 
   private async request(method: string, path: string, body?: unknown): Promise<Response> {
     const token = await this.auth.idToken();
-    return fetch(`${this.base}${path}`, {
+    const headers: Record<string, string> = {
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+      'x-client-id': CLIENT_ID,
+    };
+    const accessKey = getAccessKey();
+    if (accessKey) {
+      headers['x-access-key'] = accessKey;
+    }
+    const res = await fetch(`${this.base}${path}`, {
       method,
-      headers: {
-        authorization: `Bearer ${token}`,
-        'content-type': 'application/json',
-        'x-client-id': CLIENT_ID,
-      },
+      headers,
       body: body === undefined ? undefined : JSON.stringify(body),
     });
+    if (res.status === 403 && (await res.clone().json().catch(() => null))?.code === 'access_key') {
+      this.accessKeyFailed();
+    }
+    return res;
+  }
+
+  /** The server refused our access key: forget it and go back to sign-in. */
+  private accessKeyFailed(): void {
+    rejectAccessKey();
+    void this.auth.logout();
+  }
+
+  private async fileJson<T>(res: Response): Promise<T> {
+    if (!res.ok) {
+      throw new FileRequestError(res.status);
+    }
+    return (await res.json()) as T;
   }
 
   private assertOk(res: Response): void {
