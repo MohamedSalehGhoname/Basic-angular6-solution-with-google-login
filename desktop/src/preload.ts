@@ -38,6 +38,14 @@ const api = {
     ipcRenderer.on('clipsync:picker-copy', listener);
     return () => ipcRenderer.removeListener('clipsync:picker-copy', listener);
   },
+  /**
+   * Write to the OS clipboard from the main process. The browser Clipboard API
+   * needs the document focused, which the hidden main window is not when the
+   * picker overlay drives a copy — so route the decrypted value here instead.
+   */
+  writeClipboard(payload: { text?: string; image?: string }): void {
+    ipcRenderer.send('clipsync:write-clipboard', payload);
+  },
   setCaptureEnabled(enabled: boolean): void {
     ipcRenderer.send('clipsync:set-enabled', enabled);
   },

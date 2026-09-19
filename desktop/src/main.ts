@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   BrowserWindow,
+  ClipboardItem,
   Menu,
   Tray,
   app,
@@ -286,6 +287,34 @@ function setupPicker(): void {
     pickerWindow?.hide();
   });
   ipcMain.on('picker:close', () => pickerWindow?.hide());
+  // Write to the OS clipboard from the main process: it needs no focused
+  // document, unlike the renderer's Clipboard API, so a pick from the overlay
+  // reliably lands on the clipboard even though the main window is hidden.
+  ipcMain.on('clipsync:write-clipboard', (_event, payload: { text?: string; image?: string }) => {
+    void writeToClipboard(payload);
+  });
+}
+
+async function writeToClipboard(payload: {
+  text?: string;
+  image?: string;
+}): Promise<void> {
+  try {
+    if (payload?.image) {
+      const match = /^data:(image\/[^;]+);base64,(.*)$/s.exec(payload.image);
+      const mime = match?.[1];
+      const base64 = match?.[2];
+      if (mime && base64) {
+        const bytes = Uint8Array.from(Buffer.from(base64, 'base64'));
+        const blob = new Blob([bytes], { type: mime });
+        await clipboard.write([new ClipboardItem({ [mime]: blob })]);
+      }
+    } else if (typeof payload?.text === 'string') {
+      await clipboard.writeText(payload.text);
+    }
+  } catch {
+    // Best-effort; nothing to surface from the main process.
+  }
 }
 
 function setupGlobalShortcut(): void {

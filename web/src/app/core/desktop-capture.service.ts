@@ -23,6 +23,7 @@ interface ClipsyncDesktopApi {
   onToggleCaptureRequested?(callback: () => void): () => void;
   updatePickerItems?(items: PickerItem[]): void;
   onPickerCopy?(callback: (id: string) => void): () => void;
+  writeClipboard?(payload: { text?: string; image?: string }): void;
   setCaptureEnabled(enabled: boolean): void;
   setCaptureSecrets(enabled: boolean): void;
 }
@@ -107,14 +108,24 @@ export class DesktopCaptureService {
       );
   }
 
-  /** Copy the chosen clipboard entry, reusing the normal decrypt+copy path. */
+  /**
+   * Copy the chosen clipboard entry to the OS clipboard. We hand the decrypted
+   * value to the Electron main process, which writes it without needing a
+   * focused document — the main window is hidden while the overlay is up, so
+   * the renderer's own Clipboard API would be rejected. Falls back to the
+   * browser path only if the desktop bridge is somehow unavailable.
+   */
   private async copyById(id: string): Promise<void> {
     const entry = this.clipboard.items().find((item) => item.id === id);
     if (!entry) {
       return;
     }
     try {
-      if (entry.image) {
+      if (this.desktop?.writeClipboard) {
+        this.desktop.writeClipboard(
+          entry.image ? { image: entry.image } : { text: entry.text },
+        );
+      } else if (entry.image) {
         await this.native.copyImage(entry.image);
       } else {
         await this.native.copy(entry.text);
