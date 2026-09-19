@@ -1,0 +1,50 @@
+:host {
+  display: grid;
+  place-items: center;
+  min-height: 72vh;
+}
+
+.login-card {
+  max-width: 23rem;
+  padding: 2.75rem 2rem;
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+}
+
+.login-card h1 {
+  margin: 0 0 0.5rem;
+  font-size: 1.5rem;
+}
+
+.login-card p {
+  margin: 0 0 1.75rem;
+  color: var(--text-muted);
+}
+
+.google-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.65rem 1.25rem;
+  font: inherit;
+  font-size: 1rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.google-btn:hover {
+  background: var(--surface-hover);
+}
+
+.error {
+  margin-top: 1rem;
+  color: var(--danger);
+  font-size: 0.875rem;
+}

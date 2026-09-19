@@ -1,0 +1,212 @@
+import cors from '@fastify/cors';
+import websocket from '@fastify/websocket';
+import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
+import type { TokenVerifier } from './auth.js';
+import { SyncDb } from './db.js';
+import { SyncHub } from './hub.js';
+
+export interface AppOptions {
+  dbPath: string;
+  verifyToken: TokenVerifier;
+  /** Per-user history cap; oldest items beyond it are dropped. */
+  maxItems?: number;
+  /** Allowed CORS origin(s); defaults to reflecting the request origin. */
+  corsOrigin?: string | string[] | boolean;
+  logger?: boolean;
+}
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    uid: string;
+  }
+}
+
+// Matches CryptoService's serialization; anything else is rejected so the
+// store can only ever hold ciphertext-shaped strings.
+const BLOB_PATTERN = '^xcv1:[A-Za-z0-9_-]+$';
+const BASE64URL_PATTERN = '^[A-Za-z0-9_-]+$';
+// Large enough to hold a secret with a few compressed image attachments (all
+// ciphertext); the client downscales images so entries stay well under this.
+const MAX_BLOB_LENGTH = 8 * 1024 * 1024;
+
+const wrappedKeyProps = {
+  salt: { type: 'string', pattern: BASE64URL_PATTERN, maxLength: 128 },
+  opsLimit: { type: 'integer', minimum: 1 },
+  memLimit: { type: 'integer', minimum: 1 },
+  wrappedKey: { type: 'string', pattern: BLOB_PATTERN, maxLength: 1024 },
+} as const;
+
+const vaultBodySchema = {
+  type: 'object',
+  required: ['salt', 'opsLimit', 'memLimit', 'wrappedKey'],
+  additionalProperties: false,
+  properties: {
+    ...wrappedKeyProps,
+    // Optional recovery-code-wrapped copy of the vault key.
+    recovery: {
+      type: 'object',
+      required: ['salt', 'opsLimit', 'memLimit', 'wrappedKey'],
+      additionalProperties: false,
+      properties: wrappedKeyProps,
+    },
+  },
+} as const;
+
+const itemBodySchema = {
+  type: 'object',
+  required: ['blob'],
+  additionalProperties: false,
+  properties: {
+    blob: { type: 'string', pattern: BLOB_PATTERN, maxLength: MAX_BLOB_LENGTH },
+  },
+} as const;
+
+// The server treats collections opaquely but allowlists the known ones so a
+// typo or hostile client cannot spawn arbitrary namespaces.
+const COLLECTIONS = ['clipboard', 'secrets'] as const;
+
+const collectionParamsSchema = {
+  type: 'object',
+  required: ['collection'],
+  properties: {
+    collection: { type: 'string', enum: COLLECTIONS },
+  },
+} as const;
+
+const itemParamsSchema = {
+  type: 'object',
+  required: ['collection', 'id'],
+  properties: {
+    collection: { type: 'string', enum: COLLECTIONS },
+    id: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,64}$' },
+  },
+} as const;
+
+export interface App {
+  fastify: FastifyInstance;
+  db: SyncDb;
+  hub: SyncHub;
+}
+
+export function buildApp(options: AppOptions): App {
+  const db = new SyncDb(options.dbPath);
+  const hub = new SyncHub();
+  const maxItems = options.maxItems ?? 200;
+  // Body limit above MAX_BLOB_LENGTH so image-bearing (ciphertext) items fit.
+  const fastify = Fastify({ logger: options.logger ?? false, bodyLimit: 12 * 1024 * 1024 });
+
+  const clientId = (request: FastifyRequest): string | null => {
+    const value = request.headers['x-client-id'];
+    return typeof value === 'string' && value.length <= 64 ? value : null;
+  };
+
+  // Auth is bearer-token only (no cookies), so reflecting the origin does not
+  // enable credentialed cross-site requests; restrict via CORS_ORIGIN anyway
+  // in production.
+  fastify.register(cors, {
+    origin: options.corsOrigin ?? true,
+    methods: ['GET', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['authorization', 'content-type', 'x-client-id'],
+  });
+  fastify.register(websocket);
+
+  fastify.get('/healthz', async () => ({ ok: true }));
+
+  fastify.register(async (api) => {
+    api.addHook('preHandler', async (request, reply) => {
+      const header = request.headers.authorization;
+      const token = header?.startsWith('Bearer ') ? header.slice('Bearer '.length) : null;
+      if (!token) {
+        return reply.code(401).send({ error: 'Missing bearer token' });
+      }
+      try {
+        request.uid = (await options.verifyToken(token)).uid;
+      } catch {
+        return reply.code(401).send({ error: 'Invalid token' });
+      }
+    });
+
+    api.get('/vault', async (request, reply) => {
+      const vault = db.getVault(request.uid);
+      if (!vault) {
+        return reply.code(404).send({ error: 'No vault' });
+      }
+      return vault;
+    });
+
+    api.put('/vault', { schema: { body: vaultBodySchema } }, async (request, reply) => {
+      db.putVault(request.uid, request.body as never);
+      hub.broadcast(request.uid, { type: 'vault-updated' }, clientId(request));
+      return reply.code(204).send();
+    });
+
+    api.get(
+      '/:collection/items',
+      { schema: { params: collectionParamsSchema } },
+      async (request) => {
+        const { collection } = request.params as { collection: string };
+        return { items: db.listItems(request.uid, collection) };
+      },
+    );
+
+    api.put(
+      '/:collection/items/:id',
+      { schema: { body: itemBodySchema, params: itemParamsSchema } },
+      async (request, reply) => {
+        const { collection, id } = request.params as { collection: string; id: string };
+        const { blob } = request.body as { blob: string };
+        const item = db.putItem(request.uid, collection, id, blob, maxItems);
+        hub.broadcast(request.uid, { type: 'item-added', collection, item }, clientId(request));
+        return reply.code(204).send();
+      },
+    );
+
+    api.delete(
+      '/:collection/items/:id',
+      { schema: { params: itemParamsSchema } },
+      async (request, reply) => {
+        const { collection, id } = request.params as { collection: string; id: string };
+        db.deleteItem(request.uid, collection, id);
+        hub.broadcast(request.uid, { type: 'item-removed', collection, id }, clientId(request));
+        return reply.code(204).send();
+      },
+    );
+
+    api.delete(
+      '/:collection/items',
+      { schema: { params: collectionParamsSchema } },
+      async (request, reply) => {
+        const { collection } = request.params as { collection: string };
+        db.clearItems(request.uid, collection);
+        hub.broadcast(request.uid, { type: 'items-cleared', collection }, clientId(request));
+        return reply.code(204).send();
+      },
+    );
+  }, { prefix: '/api' });
+
+  // Browsers cannot set headers on WebSocket upgrades, so auth rides the
+  // query string here instead of the Authorization header.
+  fastify.register(async (ws) => {
+    ws.get('/api/sync', { websocket: true }, async (socket, request) => {
+      const query = request.query as { token?: string; clientId?: string };
+      if (!query.token) {
+        socket.close(4401, 'Missing token');
+        return;
+      }
+      let uid: string;
+      try {
+        uid = (await options.verifyToken(query.token)).uid;
+      } catch {
+        socket.close(4401, 'Invalid token');
+        return;
+      }
+      hub.add(uid, socket, query.clientId?.slice(0, 64) ?? null);
+    });
+  });
+
+  fastify.addHook('onClose', async () => {
+    db.close();
+  });
+
+  return { fastify, db, hub };
+}

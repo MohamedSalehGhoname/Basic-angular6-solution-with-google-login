@@ -1,0 +1,84 @@
+<h1>{{ i18n.t('settings.title') }}</h1>
+
+<section class="card">
+  <h2>{{ i18n.t('settings.appearance') }}</h2>
+  <label class="field">
+    {{ i18n.t('header.theme') }}
+    <select [ngModel]="theme.preference()" (ngModelChange)="theme.set($event)">
+      @for (option of themeOptions; track option.value) {
+        <option [value]="option.value">{{ i18n.t(option.labelKey) }}</option>
+      }
+    </select>
+  </label>
+  <label class="field">
+    {{ i18n.t('settings.language') }}
+    <select [ngModel]="i18n.locale()" (ngModelChange)="i18n.setLocale($event)">
+      @for (option of localeOptions; track option.value) {
+        <option [value]="option.value">{{ option.label }}</option>
+      }
+    </select>
+  </label>
+</section>
+
+<section class="card">
+  <h2>{{ i18n.t('settings.changePass') }}</h2>
+  <p class="muted">{{ i18n.t('settings.changePassIntro') }}</p>
+  <form (ngSubmit)="changePassphrase()">
+    <label class="field">
+      {{ i18n.t('settings.current') }}
+      <input type="password" name="current" [(ngModel)]="current" autocomplete="current-password" />
+    </label>
+    <label class="field">
+      {{ i18n.t('settings.new') }}
+      <input type="password" name="next" [(ngModel)]="next" autocomplete="new-password" />
+    </label>
+    <label class="field">
+      {{ i18n.t('settings.confirmNew') }}
+      <input type="password" name="confirm" [(ngModel)]="confirm" autocomplete="new-password" />
+    </label>
+    <div class="actions">
+      <button type="submit" [disabled]="ppBusy() || !current || !next">
+        {{ ppBusy() ? i18n.t('settings.updating') : i18n.t('settings.changePassBtn') }}
+      </button>
+    </div>
+    @if (ppError(); as message) {
+      <p class="error" role="alert">{{ message }}</p>
+    }
+    @if (ppDone()) {
+      <p class="success" role="status">{{ i18n.t('settings.changed') }}</p>
+    }
+  </form>
+</section>
+
+<section class="card">
+  <h2>{{ i18n.t('settings.recovery') }}</h2>
+  <p class="muted">{{ i18n.t('settings.recoveryIntro') }}</p>
+
+  @if (newRecoveryCode(); as code) {
+    <div class="recovery-reveal">
+      <p class="warn">{{ i18n.t('settings.recoveryWarn') }}</p>
+      <code class="code">{{ code }}</code>
+      <button type="button" class="ghost" (click)="dismissCode()">{{ i18n.t('settings.recoverySaved') }}</button>
+    </div>
+  } @else {
+    <p class="status">
+      {{ i18n.t('settings.recoveryStatus') }}:
+      <strong>
+        {{ vault.hasRecovery() ? i18n.t('settings.recoveryStatusSet') : i18n.t('settings.recoveryStatusNone') }}
+      </strong>
+    </p>
+    <div class="actions">
+      <button type="button" (click)="generateRecoveryCode()" [disabled]="recoveryBusy()">
+        {{ recoveryBusy() ? i18n.t('settings.generating') : vault.hasRecovery() ? i18n.t('settings.replaceRecovery') : i18n.t('settings.createRecovery') }}
+      </button>
+      @if (vault.hasRecovery()) {
+        <button type="button" class="ghost danger" (click)="removeRecoveryCode()">
+          {{ i18n.t('settings.removeRecovery') }}
+        </button>
+      }
+    </div>
+  }
+  @if (recoveryError(); as message) {
+    <p class="error" role="alert">{{ message }}</p>
+  }
+</section>

@@ -1,0 +1,88 @@
+<form class="unlock-card" (ngSubmit)="submit()">
+  @if (!ready()) {
+    <p class="hint">{{ i18n.t('unlock.checking') }}</p>
+  } @else if (usingRecovery()) {
+    <h1>{{ i18n.t('unlock.recovery.title') }}</h1>
+    <p>{{ i18n.t('unlock.recovery.intro') }}</p>
+  } @else if (creating()) {
+    <h1>{{ i18n.t('unlock.create.title') }}</h1>
+    <p>{{ i18n.t('unlock.create.intro') }}</p>
+  } @else {
+    <h1>{{ i18n.t('unlock.title') }}</h1>
+    <p>{{ i18n.t('unlock.intro') }}</p>
+  }
+
+  @if (ready() && usingRecovery()) {
+    <label>
+      {{ i18n.t('unlock.recovery.label') }}
+      <input
+        type="text"
+        name="recoveryCode"
+        [(ngModel)]="recoveryCode"
+        autocomplete="off"
+        spellcheck="false"
+        placeholder="XXXXX-XXXXX-XXXXX-XXXXX-XXXXX"
+        [disabled]="busy()"
+        autofocus
+      />
+    </label>
+
+    <button type="submit" [disabled]="busy()">
+      {{ busy() ? i18n.t('unlock.deriving') : i18n.t('unlock.unlockWithCode') }}
+    </button>
+
+    @if (error(); as message) {
+      <p class="error" role="alert">{{ message }}</p>
+    }
+
+    <button type="button" class="link" (click)="toggleRecovery()">
+      {{ i18n.t('unlock.backToPassphrase') }}
+    </button>
+  } @else if (ready()) {
+    <label>
+      {{ i18n.t('unlock.passphrase') }}
+      <input
+        type="password"
+        name="passphrase"
+        [(ngModel)]="passphrase"
+        autocomplete="{{ creating() ? 'new-password' : 'current-password' }}"
+        [disabled]="busy()"
+        autofocus
+      />
+    </label>
+
+    @if (creating()) {
+      <label>
+        {{ i18n.t('unlock.confirm') }}
+        <input
+          type="password"
+          name="confirmation"
+          [(ngModel)]="confirmation"
+          autocomplete="new-password"
+          [disabled]="busy()"
+        />
+      </label>
+      <p class="hint">{{ i18n.t('unlock.minHint', { n: minLength }) }}</p>
+    }
+
+    <button type="submit" [disabled]="busy()">
+      @if (busy()) {
+        {{ i18n.t('unlock.deriving') }}
+      } @else if (creating()) {
+        {{ i18n.t('unlock.createBtn') }}
+      } @else {
+        {{ i18n.t('unlock.unlockBtn') }}
+      }
+    </button>
+
+    @if (error(); as message) {
+      <p class="error" role="alert">{{ message }}</p>
+    }
+
+    @if (!creating()) {
+      <button type="button" class="link" (click)="toggleRecovery()">
+        {{ i18n.t('unlock.forgot') }}
+      </button>
+    }
+  }
+</form>
