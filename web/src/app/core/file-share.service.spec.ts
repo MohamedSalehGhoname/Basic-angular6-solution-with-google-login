@@ -57,6 +57,21 @@ class FakeDesktop {
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+/** A Response whose body arrives in two pieces, like a real download. */
+function streamed(bytes: Uint8Array): Response {
+  const half = Math.ceil(bytes.length / 2);
+  return new Response(
+    new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes.subarray(0, half));
+        controller.enqueue(bytes.subarray(half));
+        controller.close();
+      },
+    }),
+    { headers: { 'content-length': String(bytes.length) } },
+  );
+}
+
 describe('FileShareService', () => {
   const user = signal<{ uid: string } | null>({ uid: 'u1' });
   let status: WritableSignal<VaultStatus>;
@@ -69,7 +84,8 @@ describe('FileShareService', () => {
   };
   let addFile: ReturnType<typeof vi.fn>;
   let addText: ReturnType<typeof vi.fn>;
-  let native: { canSaveFile: boolean; saveFile: ReturnType<typeof vi.fn> };
+  let native: { canSaveFile: boolean; startFileSave: ReturnType<typeof vi.fn> };
+  let saved: { name: string; pieces: Uint8Array[]; finished: boolean; cancelled: boolean };
 
   const inject = () => {
     TestBed.configureTestingModule({
@@ -104,11 +120,28 @@ describe('FileShareService', () => {
       })),
       confirmFile: vi.fn(async () => undefined),
       fileDownloadUrl: vi.fn(async () => 'https://storage/get'),
-      fileContent: vi.fn(async () => fromBase64(VECTOR)),
+      fileContent: vi.fn(async () => streamed(fromBase64(VECTOR))),
     };
     addFile = vi.fn(async () => null);
     addText = vi.fn(async () => null);
-    native = { canSaveFile: false, saveFile: vi.fn(async () => undefined) };
+    saved = { name: '', pieces: [], finished: false, cancelled: false };
+    native = {
+      canSaveFile: false,
+      startFileSave: vi.fn(async (name: string) => {
+        saved.name = name;
+        return {
+          write: async (bytes: Uint8Array) => {
+            saved.pieces.push(bytes);
+          },
+          finish: async () => {
+            saved.finished = true;
+          },
+          cancel: async () => {
+            saved.cancelled = true;
+          },
+        };
+      }),
+    };
   });
 
   afterEach(() => {
@@ -257,20 +290,59 @@ describe('FileShareService', () => {
     click.mockRestore();
   });
 
-  it('on the phone, fetches through the server, decrypts and hands it to the share sheet', async () => {
+  it('on the phone, streams through the server into a file, decrypting as it goes', async () => {
     delete (window as unknown as { clipsyncDesktop?: unknown }).clipsyncDesktop;
     native.canSaveFile = true;
     const key = btoa(String.fromCharCode(...new Uint8Array(32).fill(7)));
     const service = inject();
+    const seen: number[] = [];
+    // Progress is reported while the body arrives, not only at the end.
+    const stop = setInterval(() => {
+      const transfer = service.transfers()[0];
+      if (transfer) {
+        seen.push(transfer.done);
+      }
+    }, 0);
     await service.download({ id: 'fil_1', name: 'vector.txt', size: 48, key });
+    clearInterval(stop);
 
     expect(api.fileContent).toHaveBeenCalledWith('fil_1');
-    const [name, bytes] = native.saveFile.mock.calls[0]!;
-    expect(name).toBe('vector.txt');
-    expect(new TextDecoder().decode(bytes as Uint8Array)).toBe(
-      'Clipboard Sync shared test vector, three chunks!',
-    );
+    expect(saved.name).toBe('vector.txt');
+    expect(saved.finished).toBe(true);
+    expect(saved.cancelled).toBe(false);
+    const joined = saved.pieces.map((piece) => new TextDecoder().decode(piece)).join('');
+    expect(joined).toBe('Clipboard Sync shared test vector, three chunks!');
     expect(service.transfers()).toEqual([]);
+  });
+
+  it('reports progress as the file arrives and never holds it whole', async () => {
+    delete (window as unknown as { clipsyncDesktop?: unknown }).clipsyncDesktop;
+    native.canSaveFile = true;
+    const service = inject();
+    const progress: { done: number; total: number }[] = [];
+    native.startFileSave = vi.fn(async () => ({
+      write: async () => {
+        const transfer = service.transfers()[0]!;
+        progress.push({ done: transfer.done, total: transfer.total });
+      },
+      finish: async () => undefined,
+      cancel: async () => undefined,
+    }));
+    // A plain (unencrypted) file: each piece of the body is written straight out.
+    await service.download({ id: 'fil_1', name: 'plain.bin', size: 129 });
+    expect(progress.length).toBeGreaterThan(1);
+    expect(progress[0]!.done).toBeLessThan(progress.at(-1)!.done);
+    expect(progress.at(-1)!.done).toBe(progress.at(-1)!.total);
+  });
+
+  it('drops the half-written file when a download fails', async () => {
+    delete (window as unknown as { clipsyncDesktop?: unknown }).clipsyncDesktop;
+    native.canSaveFile = true;
+    api.fileContent.mockRejectedValue(new FileRequestError(502));
+    const service = inject();
+    await service.download({ id: 'fil_1', name: 'x.bin', size: 10 });
+    expect(saved.cancelled).toBe(true);
+    expect(service.transfers()[0]!.error).toBe('files.error.server');
   });
 
   it('refuses files too large for the phone', async () => {

@@ -113,13 +113,17 @@ export class SyncApi {
     return (await this.fileJson<{ downloadUrl: string }>(res)).downloadUrl;
   }
 
-  /** The stored bytes relayed by the sync server, for in-browser decryption. */
-  async fileContent(fileId: string): Promise<Uint8Array> {
+  /**
+   * The stored bytes relayed by the sync server. The response is returned
+   * unread so callers can stream it: a file is decrypted and written away
+   * piece by piece instead of being held in memory.
+   */
+  async fileContent(fileId: string): Promise<Response> {
     const res = await this.request('GET', `/api/files/${encodeURIComponent(fileId)}/content`);
     if (!res.ok) {
       throw new FileRequestError(res.status);
     }
-    return new Uint8Array(await res.arrayBuffer());
+    return res;
   }
 
   /**

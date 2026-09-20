@@ -111,7 +111,8 @@ public class ShareReceiverActivity extends Activity {
         return last != null ? last : "file";
     }
 
-    private static String safeName(String name) {
+    /** Strips path separators and control characters; shared with the plugin. */
+    static String safeName(String name) {
         String cleaned = name.replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", "_").trim();
         return cleaned.isEmpty() ? "file" : cleaned;
     }

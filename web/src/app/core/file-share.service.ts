@@ -2,10 +2,10 @@ import { Injectable, effect, inject, signal } from '@angular/core';
 import { AuthService } from './auth.service';
 import { ClipboardStore, type ClipboardFile } from './clipboard-store';
 import type { FileSendRequest } from './desktop-capture.service';
-import { decryptFile, encryptedSize, fromBase64, newFileKey } from './file-crypto';
+import { Csf1Decryptor, encryptedSize, fromBase64, newFileKey } from './file-crypto';
 import { desktopSender, mobileSender } from './file-senders';
 import { I18nService } from './i18n/i18n.service';
-import { NativeBridge } from './native-bridge.service';
+import { NativeBridge, type FileSink } from './native-bridge.service';
 import type { TranslationKey } from './i18n/translations';
 import { FileRequestError, SyncApi } from './sync-api';
 import { VaultService } from './vault.service';
@@ -189,14 +189,19 @@ export class FileShareService {
           key: file.key ?? null,
         });
       } else if (this.native.canSaveFile) {
-        // Phone: fetch through the server (the WebView cannot fetch storage
-        // cross-origin), decrypt if needed, then hand it to the share sheet.
+        // Phone: stream through the server (the WebView cannot fetch storage
+        // cross-origin) into a file, then hand that to the share sheet.
         if (file.size > PHONE_FILE_LIMIT) {
           throw new Error('too-large-phone');
         }
-        const stored = await this.api.fileContent(file.id);
-        const bytes = file.key ? await decryptFile(stored, fromBase64(file.key)) : stored;
-        await this.native.saveFile(file.name, bytes);
+        const sink = await this.native.startFileSave(file.name);
+        try {
+          await this.streamInto(id, file, sink);
+          await sink.finish();
+        } catch (err) {
+          await sink.cancel();
+          throw err;
+        }
       } else if (!file.key) {
         // Opened, not fetched: storage URLs are cross-origin.
         const link = document.createElement('a');
@@ -207,12 +212,55 @@ export class FileShareService {
         if (file.size > BROWSER_DECRYPT_LIMIT) {
           throw new Error('too-large');
         }
-        const plain = await decryptFile(await this.api.fileContent(file.id), fromBase64(file.key));
-        saveBlob(new Blob([plain as BlobPart]), file.name);
+        const pieces: BlobPart[] = [];
+        await this.streamInto(id, file, {
+          write: async (bytes) => {
+            pieces.push(bytes as BlobPart);
+          },
+          finish: async () => undefined,
+          cancel: async () => undefined,
+        });
+        saveBlob(new Blob(pieces), file.name);
       }
       this.untrack(id);
     } catch (err) {
       this.fail(id, describe(err));
+    }
+  }
+
+  /**
+   * Reads the stored file from the server, decrypting as it arrives, and
+   * writes it to `sink` a piece at a time while reporting progress.
+   */
+  private async streamInto(id: string, file: ClipboardFile, sink: FileSink): Promise<void> {
+    const response = await this.api.fileContent(file.id);
+    const body = response.body;
+    if (!body) {
+      throw new Error('no-body');
+    }
+    const total =
+      Number(response.headers.get('content-length')) ||
+      (file.key ? encryptedSize(file.size) : file.size);
+    const decryptor = file.key ? new Csf1Decryptor(fromBase64(file.key)) : null;
+    const reader = body.getReader();
+    let done = 0;
+    for (;;) {
+      const { value, done: finished } = await reader.read();
+      if (finished) {
+        break;
+      }
+      done += value.length;
+      this.patch(id, { done, total });
+      if (decryptor) {
+        for (const piece of await decryptor.push(value)) {
+          await sink.write(piece);
+        }
+      } else {
+        await sink.write(value);
+      }
+    }
+    if (decryptor) {
+      await sink.write(await decryptor.finish());
     }
   }
 

@@ -38,6 +38,8 @@ public class ShareReceiverPlugin extends Plugin {
     // start, so they are queued statically and drained by takePending().
     private static final List<JSObject> pending = new ArrayList<>();
     private static final Map<String, File> files = new ConcurrentHashMap<>();
+    private static final Map<String, java.io.OutputStream> downloads = new ConcurrentHashMap<>();
+    private static final Map<String, File> downloadFiles = new ConcurrentHashMap<>();
     private static ShareReceiverPlugin instance;
     private static boolean listening;
 
@@ -119,6 +121,105 @@ public class ShareReceiverPlugin extends Plugin {
         });
     }
 
+    // --- Saving a download, piece by piece ---------------------------------
+    // The web app streams a file in and we append each piece to disk, so a
+    // large download never has to sit in the WebView's memory.
+
+    @PluginMethod
+    public void saveBegin(PluginCall call) {
+        String name = call.getString("name");
+        if (name == null || name.isEmpty()) {
+            call.reject("Missing name", "invalid");
+            return;
+        }
+        String token = java.util.UUID.randomUUID().toString();
+        File dir = new File(getContext().getCacheDir(), "downloads/" + token);
+        if (!dir.mkdirs()) {
+            call.reject("Could not create the download folder", "unavailable");
+            return;
+        }
+        File target = new File(dir, ShareReceiverActivity.safeName(name));
+        try {
+            downloads.put(token, new java.io.FileOutputStream(target));
+            downloadFiles.put(token, target);
+        } catch (Exception e) {
+            call.reject("Could not write to storage: " + e.getMessage(), "unavailable");
+            return;
+        }
+        JSObject result = new JSObject();
+        result.put("token", token);
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void saveChunk(PluginCall call) {
+        String token = call.getString("token");
+        String data = call.getString("data");
+        java.io.OutputStream out = token == null ? null : downloads.get(token);
+        if (out == null || data == null) {
+            call.reject("Unknown download", "invalid");
+            return;
+        }
+        try {
+            out.write(Base64.decode(data, Base64.DEFAULT));
+            call.resolve();
+        } catch (Exception e) {
+            discardDownload(token);
+            call.reject("Could not write to storage: " + e.getMessage(), "unavailable");
+        }
+    }
+
+    /** Closes the file and returns its path for the share sheet. */
+    @PluginMethod
+    public void saveFinish(PluginCall call) {
+        String token = call.getString("token");
+        java.io.OutputStream out = token == null ? null : downloads.remove(token);
+        File file = token == null ? null : downloadFiles.remove(token);
+        if (out == null || file == null) {
+            call.reject("Unknown download", "invalid");
+            return;
+        }
+        try {
+            out.close();
+        } catch (Exception e) {
+            call.reject("Could not finish the file: " + e.getMessage(), "unavailable");
+            return;
+        }
+        JSObject result = new JSObject();
+        result.put("path", file.getAbsolutePath());
+        result.put("uri", "file://" + file.getAbsolutePath());
+        call.resolve(result);
+    }
+
+    /** Drops a download that failed part-way (no half-written file is left). */
+    @PluginMethod
+    public void saveCancel(PluginCall call) {
+        discardDownload(call.getString("token"));
+        call.resolve();
+    }
+
+    private void discardDownload(String token) {
+        if (token == null) {
+            return;
+        }
+        java.io.OutputStream out = downloads.remove(token);
+        if (out != null) {
+            try {
+                out.close();
+            } catch (Exception ignored) {
+                // Already closed.
+            }
+        }
+        File file = downloadFiles.remove(token);
+        if (file != null) {
+            file.delete();
+            File dir = file.getParentFile();
+            if (dir != null) {
+                dir.delete();
+            }
+        }
+    }
+
     /** Drops a shared file the web app will not upload. */
     @PluginMethod
     public void forget(PluginCall call) {
@@ -175,6 +276,16 @@ public class ShareReceiverPlugin extends Plugin {
         }
     }
 
+    private static void deleteTree(File root) {
+        File[] children = root.listFiles();
+        if (children != null) {
+            for (File child : children) {
+                deleteTree(child);
+            }
+        }
+        root.delete();
+    }
+
     private static void forgetFile(String requestId) {
         File file = files.remove(requestId);
         if (file != null) {
@@ -188,6 +299,7 @@ public class ShareReceiverPlugin extends Plugin {
 
     /** Removes copies left behind by shares a previous run never finished. */
     private void cleanUpOrphans() {
+        deleteTree(new File(getContext().getCacheDir(), "downloads"));
         File[] dirs = sharesDir(getContext()).listFiles();
         if (dirs == null) {
             return;

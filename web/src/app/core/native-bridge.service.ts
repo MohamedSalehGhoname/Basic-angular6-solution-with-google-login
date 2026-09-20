@@ -22,19 +22,26 @@ interface CapacitorGlobal {
         files?: string[];
       }): Promise<unknown>;
     };
-    Filesystem?: {
-      writeFile(options: {
-        path: string;
-        data: string;
-        directory: 'CACHE';
-        recursive?: boolean;
-      }): Promise<{ uri: string }>;
+    // Our own plugin (mobile/plugins/share-receiver), which also writes
+    // downloads to disk a piece at a time.
+    ShareReceiver?: {
+      saveBegin(options: { name: string }): Promise<{ token: string }>;
+      saveChunk(options: { token: string; data: string }): Promise<void>;
+      saveFinish(options: { token: string }): Promise<{ uri: string }>;
+      saveCancel(options: { token: string }): Promise<void>;
     };
   };
 }
 
 function capacitor(): CapacitorGlobal | undefined {
   return (window as unknown as { Capacitor?: CapacitorGlobal }).Capacitor;
+}
+
+/** Somewhere a downloaded file is written, a piece at a time. */
+export interface FileSink {
+  write(bytes: Uint8Array): Promise<void>;
+  finish(): Promise<void>;
+  cancel(): Promise<void>;
 }
 
 /**
@@ -79,28 +86,33 @@ export class NativeBridge {
   /** Whether this app can save a file natively (the mobile app). */
   get canSaveFile(): boolean {
     const plugins = capacitor()?.Plugins;
-    return !!plugins?.Filesystem && !!plugins?.Share;
+    return !!plugins?.ShareReceiver?.saveBegin && !!plugins?.Share;
   }
 
   /**
-   * Hands a downloaded file to the phone: writes it to the app's cache and
-   * opens the share sheet, where the user saves it or opens it in an app.
+   * Starts saving a downloaded file on the phone. The caller writes it in
+   * pieces — each one goes straight to a file in the app's cache, so a large
+   * download never sits in the WebView's memory — and finish() opens the
+   * share sheet to save it or open it in an app.
    */
-  async saveFile(name: string, bytes: Uint8Array): Promise<void> {
+  async startFileSave(name: string): Promise<FileSink> {
     const plugins = capacitor()?.Plugins;
-    if (!plugins?.Filesystem || !plugins.Share) {
+    const receiver = plugins?.ShareReceiver;
+    const share = plugins?.Share;
+    if (!receiver || !share) {
       throw new Error('Native file saving is unavailable');
     }
-    // eslint-disable-next-line no-control-regex
-    const safeName = name.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_') || 'file';
-    const { uri } = await plugins.Filesystem.writeFile({
-      path: `downloads/${Date.now()}/${safeName}`,
-      data: toBase64(bytes),
-      directory: 'CACHE',
-      recursive: true,
-    });
-    await plugins.Share.share({ title: safeName, files: [uri] });
+    const { token } = await receiver.saveBegin({ name });
+    return {
+      write: (bytes) => receiver.saveChunk({ token, data: toBase64(bytes) }),
+      finish: async () => {
+        const { uri } = await receiver.saveFinish({ token });
+        await share.share({ title: name, files: [uri] });
+      },
+      cancel: () => receiver.saveCancel({ token }).catch(() => undefined),
+    };
   }
+
 
   /** Whether a share sheet is available (native, or the Web Share API). */
   get canShare(): boolean {
