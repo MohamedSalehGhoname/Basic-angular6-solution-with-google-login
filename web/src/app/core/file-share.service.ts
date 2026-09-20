@@ -5,7 +5,7 @@ import type { FileSendRequest } from './desktop-capture.service';
 import { Csf1Decryptor, encryptedSize, fromBase64, newFileKey } from './file-crypto';
 import { desktopSender, mobileSender } from './file-senders';
 import { I18nService } from './i18n/i18n.service';
-import { NativeBridge, type FileSink } from './native-bridge.service';
+import { NativeBridge } from './native-bridge.service';
 import type { TranslationKey } from './i18n/translations';
 import { FileRequestError, SyncApi } from './sync-api';
 import { VaultService } from './vault.service';
@@ -26,8 +26,8 @@ export interface FileTransfer {
 const ENCRYPT_KEY = 'clipsync.files.encrypt';
 // Browsers decrypt in memory; past this, point people at the desktop app.
 const BROWSER_DECRYPT_LIMIT = 512 * 1024 * 1024;
-// The phone app moves the whole file through the native bridge as base64.
-const PHONE_FILE_LIMIT = 150 * 1024 * 1024;
+// The phone downloads natively to its cache, which is the limit that matters.
+const PHONE_FILE_LIMIT = 500 * 1024 * 1024;
 const FAILED_VISIBLE_MS = 8000;
 
 /**
@@ -189,18 +189,22 @@ export class FileShareService {
           key: file.key ?? null,
         });
       } else if (this.native.canSaveFile) {
-        // Phone: stream through the server (the WebView cannot fetch storage
-        // cross-origin) into a file, then hand that to the share sheet.
+        // Phone: the plugin downloads straight from storage and decrypts
+        // natively, so it keeps going in the background or with the screen
+        // off; progress arrives as events.
         if (file.size > PHONE_FILE_LIMIT) {
           throw new Error('too-large-phone');
         }
-        const sink = await this.native.startFileSave(file.name);
-        try {
-          await this.streamInto(id, file, sink);
-          await sink.finish();
-        } catch (err) {
-          await sink.cancel();
-          throw err;
+        const uri = await this.native.downloadFile({
+          id,
+          url: await this.api.fileDownloadUrl(file.id),
+          name: file.name,
+          key: file.key ?? null,
+        });
+        // Only offer the share sheet if the user is looking at the app; a
+        // background download just leaves its notification.
+        if (document.visibilityState === 'visible') {
+          await this.native.shareFile(file.name, uri);
         }
       } else if (!file.key) {
         // Opened, not fetched: storage URLs are cross-origin.
@@ -217,8 +221,6 @@ export class FileShareService {
           write: async (bytes) => {
             pieces.push(bytes as BlobPart);
           },
-          finish: async () => undefined,
-          cancel: async () => undefined,
         });
         saveBlob(new Blob(pieces), file.name);
       }
@@ -230,9 +232,14 @@ export class FileShareService {
 
   /**
    * Reads the stored file from the server, decrypting as it arrives, and
-   * writes it to `sink` a piece at a time while reporting progress.
+   * writes it out a piece at a time while reporting progress. Used by
+   * browsers; the phone and desktop apps do this natively.
    */
-  private async streamInto(id: string, file: ClipboardFile, sink: FileSink): Promise<void> {
+  private async streamInto(
+    id: string,
+    file: ClipboardFile,
+    sink: { write(bytes: Uint8Array): Promise<void> },
+  ): Promise<void> {
     const response = await this.api.fileContent(file.id);
     const body = response.body;
     if (!body) {

@@ -38,12 +38,11 @@ public class ShareReceiverPlugin extends Plugin {
     // start, so they are queued statically and drained by takePending().
     private static final List<JSObject> pending = new ArrayList<>();
     private static final Map<String, File> files = new ConcurrentHashMap<>();
-    private static final Map<String, java.io.OutputStream> downloads = new ConcurrentHashMap<>();
-    private static final Map<String, File> downloadFiles = new ConcurrentHashMap<>();
     private static ShareReceiverPlugin instance;
     private static boolean listening;
 
     private final ExecutorService uploads = Executors.newSingleThreadExecutor();
+    private final ExecutorService fetches = Executors.newFixedThreadPool(2);
 
     static File sharesDir(Context context) {
         return new File(context.getCacheDir(), "shares");
@@ -110,6 +109,8 @@ public class ShareReceiverPlugin extends Plugin {
             call.reject("Unknown file");
             return;
         }
+        String title = "Sending " + file.getName();
+        TransferService.begin(getContext(), title);
         uploads.execute(() -> {
             try {
                 put(requestId, file, uploadUrl, key == null ? null : Base64.decode(key, Base64.DEFAULT));
@@ -117,107 +118,110 @@ public class ShareReceiverPlugin extends Plugin {
                 call.resolve();
             } catch (Exception e) {
                 call.reject("Upload failed: " + e.getMessage());
+            } finally {
+                TransferService.end(getContext());
             }
         });
     }
 
-    // --- Saving a download, piece by piece ---------------------------------
-    // The web app streams a file in and we append each piece to disk, so a
-    // large download never has to sit in the WebView's memory.
-
+    /**
+     * Downloads a file straight from storage, decrypts it when a base64 key
+     * is given, and writes it into the app's cache. Runs on a background
+     * thread inside a foreground service, so it keeps going when the app is
+     * in the background or the screen is off.
+     */
     @PluginMethod
-    public void saveBegin(PluginCall call) {
+    public void download(PluginCall call) {
+        String id = call.getString("id");
+        String url = call.getString("url");
         String name = call.getString("name");
-        if (name == null || name.isEmpty()) {
-            call.reject("Missing name", "invalid");
+        String key = call.getString("key");
+        if (id == null || url == null || name == null) {
+            call.reject("Missing download details", "invalid");
             return;
         }
-        String token = java.util.UUID.randomUUID().toString();
-        File dir = new File(getContext().getCacheDir(), "downloads/" + token);
-        if (!dir.mkdirs()) {
-            call.reject("Could not create the download folder", "unavailable");
-            return;
-        }
-        File target = new File(dir, ShareReceiverActivity.safeName(name));
-        try {
-            downloads.put(token, new java.io.FileOutputStream(target));
-            downloadFiles.put(token, target);
-        } catch (Exception e) {
-            call.reject("Could not write to storage: " + e.getMessage(), "unavailable");
-            return;
-        }
-        JSObject result = new JSObject();
-        result.put("token", token);
-        call.resolve(result);
-    }
-
-    @PluginMethod
-    public void saveChunk(PluginCall call) {
-        String token = call.getString("token");
-        String data = call.getString("data");
-        java.io.OutputStream out = token == null ? null : downloads.get(token);
-        if (out == null || data == null) {
-            call.reject("Unknown download", "invalid");
-            return;
-        }
-        try {
-            out.write(Base64.decode(data, Base64.DEFAULT));
-            call.resolve();
-        } catch (Exception e) {
-            discardDownload(token);
-            call.reject("Could not write to storage: " + e.getMessage(), "unavailable");
-        }
-    }
-
-    /** Closes the file and returns its path for the share sheet. */
-    @PluginMethod
-    public void saveFinish(PluginCall call) {
-        String token = call.getString("token");
-        java.io.OutputStream out = token == null ? null : downloads.remove(token);
-        File file = token == null ? null : downloadFiles.remove(token);
-        if (out == null || file == null) {
-            call.reject("Unknown download", "invalid");
-            return;
-        }
-        try {
-            out.close();
-        } catch (Exception e) {
-            call.reject("Could not finish the file: " + e.getMessage(), "unavailable");
-            return;
-        }
-        JSObject result = new JSObject();
-        result.put("path", file.getAbsolutePath());
-        result.put("uri", "file://" + file.getAbsolutePath());
-        call.resolve(result);
-    }
-
-    /** Drops a download that failed part-way (no half-written file is left). */
-    @PluginMethod
-    public void saveCancel(PluginCall call) {
-        discardDownload(call.getString("token"));
-        call.resolve();
-    }
-
-    private void discardDownload(String token) {
-        if (token == null) {
-            return;
-        }
-        java.io.OutputStream out = downloads.remove(token);
-        if (out != null) {
+        String safeName = ShareReceiverActivity.safeName(name);
+        String title = "Downloading " + safeName;
+        TransferService.begin(getContext(), title);
+        fetches.execute(() -> {
+            File dir = new File(getContext().getCacheDir(), "downloads/" + java.util.UUID.randomUUID());
+            File target = new File(dir, safeName);
             try {
-                out.close();
-            } catch (Exception ignored) {
-                // Already closed.
+                if (!dir.mkdirs()) {
+                    throw new Exception("could not create the download folder");
+                }
+                fetch(id, url, target, key == null ? null : Base64.decode(key, Base64.DEFAULT), title);
+                JSObject result = new JSObject();
+                result.put("uri", "file://" + target.getAbsolutePath());
+                result.put("path", target.getAbsolutePath());
+                call.resolve(result);
+            } catch (Exception e) {
+                deleteTree(dir);
+                call.reject("Download failed: " + e.getMessage(), "failed");
+            } finally {
+                TransferService.end(getContext());
+            }
+        });
+    }
+
+    private void fetch(String id, String url, File target, byte[] key, String title) throws Exception {
+        HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
+        try {
+            connection.setConnectTimeout(30_000);
+            connection.setReadTimeout(120_000);
+            int status = connection.getResponseCode();
+            if (status < 200 || status >= 300) {
+                throw new Exception("status " + status);
+            }
+            long total = connection.getContentLengthLong();
+            final long[] lastReport = { 0 };
+            Csf1.Progress progress = (written) -> {
+                long now = System.currentTimeMillis();
+                if (now - lastReport[0] > 400) {
+                    lastReport[0] = now;
+                    JSObject event = new JSObject();
+                    event.put("id", id);
+                    event.put("done", written);
+                    event.put("total", total > 0 ? total : written);
+                    notifyListeners("progress", event);
+                    TransferService.update(getContext(), title, written, total);
+                }
+            };
+            try (InputStream in = connection.getInputStream(); OutputStream out = new BufferedOutputStream(new java.io.FileOutputStream(target), 64 * 1024)) {
+                if (key != null) {
+                    // Progress here counts plaintext bytes; close enough for a bar.
+                    Csf1.decrypt(in, out, key, progress);
+                } else {
+                    byte[] buffer = new byte[64 * 1024];
+                    long written = 0;
+                    int read;
+                    while ((read = in.read(buffer)) > 0) {
+                        out.write(buffer, 0, read);
+                        written += read;
+                        progress.onBytes(written);
+                    }
+                }
+            }
+            JSObject done = new JSObject();
+            done.put("id", id);
+            done.put("done", target.length());
+            done.put("total", target.length());
+            notifyListeners("progress", done);
+        } finally {
+            connection.disconnect();
+        }
+    }
+
+    /** Asks for the notification permission that shows transfer progress (Android 13+). */
+    @PluginMethod
+    public void requestNotifications(PluginCall call) {
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            String permission = android.Manifest.permission.POST_NOTIFICATIONS;
+            if (getContext().checkSelfPermission(permission) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                getActivity().requestPermissions(new String[] { permission }, 9911);
             }
         }
-        File file = downloadFiles.remove(token);
-        if (file != null) {
-            file.delete();
-            File dir = file.getParentFile();
-            if (dir != null) {
-                dir.delete();
-            }
-        }
+        call.resolve();
     }
 
     /** Drops a shared file the web app will not upload. */

@@ -1,5 +1,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Transfers keep running with the app in the background or the screen off. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <application>
+        <service
+            android:name="com.ghonametech.sharereceiver.TransferService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
         <!-- "Clipboard Sync" in other apps' Share menu: text, files and photos. -->
         <activity
             android:name="com.ghonametech.sharereceiver.ShareReceiverActivity"

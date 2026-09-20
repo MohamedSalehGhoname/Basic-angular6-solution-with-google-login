@@ -22,26 +22,22 @@ interface CapacitorGlobal {
         files?: string[];
       }): Promise<unknown>;
     };
-    // Our own plugin (mobile/plugins/share-receiver), which also writes
-    // downloads to disk a piece at a time.
+    // Our own plugin (mobile/plugins/share-receiver), which downloads and
+    // decrypts files natively so the work survives the background.
     ShareReceiver?: {
-      saveBegin(options: { name: string }): Promise<{ token: string }>;
-      saveChunk(options: { token: string; data: string }): Promise<void>;
-      saveFinish(options: { token: string }): Promise<{ uri: string }>;
-      saveCancel(options: { token: string }): Promise<void>;
+      download(options: {
+        id: string;
+        url: string;
+        name: string;
+        key: string | null;
+      }): Promise<{ uri: string; path: string }>;
+      requestNotifications?(): Promise<void>;
     };
   };
 }
 
 function capacitor(): CapacitorGlobal | undefined {
   return (window as unknown as { Capacitor?: CapacitorGlobal }).Capacitor;
-}
-
-/** Somewhere a downloaded file is written, a piece at a time. */
-export interface FileSink {
-  write(bytes: Uint8Array): Promise<void>;
-  finish(): Promise<void>;
-  cancel(): Promise<void>;
 }
 
 /**
@@ -83,36 +79,37 @@ export class NativeBridge {
     await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
   }
 
-  /** Whether this app can save a file natively (the mobile app). */
+  /** Whether the phone app can download and save a file by itself. */
   get canSaveFile(): boolean {
     const plugins = capacitor()?.Plugins;
-    return !!plugins?.ShareReceiver?.saveBegin && !!plugins?.Share;
+    return !!plugins?.ShareReceiver?.download && !!plugins?.Share;
   }
 
   /**
-   * Starts saving a downloaded file on the phone. The caller writes it in
-   * pieces — each one goes straight to a file in the app's cache, so a large
-   * download never sits in the WebView's memory — and finish() opens the
-   * share sheet to save it or open it in an app.
+   * Downloads (and decrypts) a file natively, outside the web page: the
+   * phone keeps it running with the app in the background or the screen
+   * off, and progress arrives as ShareReceiver "progress" events. Resolves
+   * with the saved file's uri.
    */
-  async startFileSave(name: string): Promise<FileSink> {
-    const plugins = capacitor()?.Plugins;
-    const receiver = plugins?.ShareReceiver;
-    const share = plugins?.Share;
-    if (!receiver || !share) {
-      throw new Error('Native file saving is unavailable');
+  async downloadFile(args: {
+    id: string;
+    url: string;
+    name: string;
+    key: string | null;
+  }): Promise<string> {
+    const receiver = capacitor()?.Plugins?.ShareReceiver;
+    if (!receiver?.download) {
+      throw new Error('Native download is unavailable');
     }
-    const { token } = await receiver.saveBegin({ name });
-    return {
-      write: (bytes) => receiver.saveChunk({ token, data: toBase64(bytes) }),
-      finish: async () => {
-        const { uri } = await receiver.saveFinish({ token });
-        await share.share({ title: name, files: [uri] });
-      },
-      cancel: () => receiver.saveCancel({ token }).catch(() => undefined),
-    };
+    await receiver.requestNotifications?.().catch(() => undefined);
+    const { uri } = await receiver.download(args);
+    return uri;
   }
 
+  /** Opens the phone's share sheet for a saved file, to keep or open it. */
+  async shareFile(name: string, uri: string): Promise<void> {
+    await capacitor()?.Plugins?.Share?.share({ title: name, files: [uri] });
+  }
 
   /** Whether a share sheet is available (native, or the Web Share API). */
   get canShare(): boolean {
