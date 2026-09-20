@@ -33,6 +33,7 @@ interface CapacitorGlobal {
       }): Promise<{ uri: string; path: string }>;
       requestStorage?(): Promise<void>;
       requestNotifications?(): Promise<void>;
+      openDownload?(options: { uri: string; name: string }): Promise<void>;
     };
   };
 }
@@ -90,22 +91,32 @@ export class NativeBridge {
    * Downloads (and decrypts) a file natively, outside the web page: the
    * phone keeps it running with the app in the background or the screen
    * off, and progress arrives as ShareReceiver "progress" events. The file
-   * lands in the phone's Downloads folder; resolves with where it went.
+   * lands in the phone's Downloads folder; resolves with where it went and
+   * a handle for opening it.
    */
   async downloadFile(args: {
     id: string;
     url: string;
     name: string;
     key: string | null;
-  }): Promise<string> {
+  }): Promise<{ path: string; uri: string }> {
     const receiver = capacitor()?.Plugins?.ShareReceiver;
     if (!receiver?.download) {
       throw new Error('Native download is unavailable');
     }
     await receiver.requestNotifications?.().catch(() => undefined);
     await receiver.requestStorage?.().catch(() => undefined);
-    const { path } = await receiver.download(args);
-    return path;
+    const { path, uri } = await receiver.download(args);
+    return { path, uri };
+  }
+
+  /** Opens a saved download on the phone. */
+  async openDownload(uri: string, name: string): Promise<void> {
+    const receiver = capacitor()?.Plugins?.ShareReceiver;
+    if (!receiver?.openDownload) {
+      throw new Error('Opening files is unavailable');
+    }
+    await receiver.openDownload({ uri, name });
   }
 
   /** Whether a share sheet is available (native, or the Web Share API). */

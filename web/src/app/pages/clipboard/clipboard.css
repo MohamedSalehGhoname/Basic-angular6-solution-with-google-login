@@ -277,3 +277,9 @@ button.ghost:hover:not(:disabled) {
   background: var(--primary-soft);
   border-radius: var(--radius-sm);
 }
+
+.saved-note .saved-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.4rem;
+}

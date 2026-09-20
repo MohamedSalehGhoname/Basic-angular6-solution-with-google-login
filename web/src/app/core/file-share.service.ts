@@ -10,6 +10,14 @@ import type { TranslationKey } from './i18n/translations';
 import { FileRequestError, SyncApi } from './sync-api';
 import { VaultService } from './vault.service';
 
+/** A file saved on the phone, and how to open it. */
+export interface SavedFile {
+  /** Where it went, e.g. "Download/report.pdf". */
+  path: string;
+  uri: string;
+  name: string;
+}
+
 /** An upload or download in progress, or one that just failed. */
 export interface FileTransfer {
   id: string;
@@ -59,8 +67,8 @@ export class FileShareService {
   private readonly _transfers = signal<FileTransfer[]>([]);
   readonly transfers = this._transfers.asReadonly();
 
-  private readonly _savedTo = signal<string | null>(null);
-  /** Where the last phone download was saved, e.g. "Download/report.pdf". */
+  private readonly _savedTo = signal<SavedFile | null>(null);
+  /** The last file saved on the phone, for the "saved to…" note. */
   readonly savedTo = this._savedTo.asReadonly();
 
   /** Sends (and shared text) that arrived while the vault was locked. */
@@ -199,7 +207,7 @@ export class FileShareService {
         if (file.size > PHONE_FILE_LIMIT) {
           throw new Error('too-large-phone');
         }
-        const savedTo = await this.native.downloadFile({
+        const saved = await this.native.downloadFile({
           id,
           url: await this.api.fileDownloadUrl(file.id),
           name: file.name,
@@ -207,7 +215,7 @@ export class FileShareService {
         });
         // It is saved in the phone's Downloads folder; say so (the app may
         // have been in the background, where only the notification shows).
-        this._savedTo.set(savedTo);
+        this._savedTo.set({ ...saved, name: file.name });
       } else if (!file.key) {
         // Opened, not fetched: storage URLs are cross-origin.
         const link = document.createElement('a');
@@ -276,6 +284,19 @@ export class FileShareService {
   /** Clears the "saved to…" note. */
   dismissSaved(): void {
     this._savedTo.set(null);
+  }
+
+  /** Opens the file the note is about, in whichever app handles it. */
+  async openSaved(): Promise<void> {
+    const saved = this._savedTo();
+    if (!saved) {
+      return;
+    }
+    try {
+      await this.native.openDownload(saved.uri, saved.name);
+    } catch {
+      this.fail(`open-${saved.uri}`, 'files.error.open');
+    }
   }
 
   dismiss(id: string): void {

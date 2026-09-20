@@ -228,6 +228,28 @@ public class ShareReceiverPlugin extends Plugin {
         call.resolve();
     }
 
+    /** Opens a saved download in whichever app handles that kind of file. */
+    @PluginMethod
+    public void openDownload(PluginCall call) {
+        String uri = call.getString("uri");
+        String name = call.getString("name", "");
+        if (uri == null) {
+            call.reject("Missing file", "invalid");
+            return;
+        }
+        android.content.Intent view = new android.content.Intent(android.content.Intent.ACTION_VIEW)
+            .setDataAndType(android.net.Uri.parse(uri), Downloads.mimeType(name))
+            .addFlags(
+                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION | android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+            );
+        try {
+            getContext().startActivity(view);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("No app can open this file", "no_app");
+        }
+    }
+
     /** Android 9 and older need permission to write into Downloads. */
     @PluginMethod
     public void requestStorage(PluginCall call) {

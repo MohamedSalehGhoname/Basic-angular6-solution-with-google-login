@@ -84,7 +84,11 @@ describe('FileShareService', () => {
   };
   let addFile: ReturnType<typeof vi.fn>;
   let addText: ReturnType<typeof vi.fn>;
-  let native: { canSaveFile: boolean; downloadFile: ReturnType<typeof vi.fn> };
+  let native: {
+    canSaveFile: boolean;
+    downloadFile: ReturnType<typeof vi.fn>;
+    openDownload: ReturnType<typeof vi.fn>;
+  };
 
   const inject = () => {
     TestBed.configureTestingModule({
@@ -125,7 +129,8 @@ describe('FileShareService', () => {
     addText = vi.fn(async () => null);
     native = {
       canSaveFile: false,
-      downloadFile: vi.fn(async () => 'Download/vector.txt'),
+      downloadFile: vi.fn(async () => ({ path: 'Download/vector.txt', uri: 'content://downloads/1' })),
+      openDownload: vi.fn(async () => undefined),
     };
   });
 
@@ -289,7 +294,15 @@ describe('FileShareService', () => {
       key: 'KEY',
     });
     // Saved into the phone's Downloads folder, and the app says where.
-    expect(service.savedTo()).toBe('Download/vector.txt');
+    expect(service.savedTo()).toEqual({
+      path: 'Download/vector.txt',
+      uri: 'content://downloads/1',
+      name: 'vector.txt',
+    });
+
+    // The note's Open button hands the file back to the phone.
+    await service.openSaved();
+    expect(native.openDownload).toHaveBeenCalledWith('content://downloads/1', 'vector.txt');
     expect(service.transfers()).toEqual([]);
   });
 

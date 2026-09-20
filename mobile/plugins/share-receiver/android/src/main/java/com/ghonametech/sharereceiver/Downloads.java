@@ -107,7 +107,7 @@ final class Downloads {
         return candidate;
     }
 
-    private static String mimeType(String name) {
+    static String mimeType(String name) {
         int dot = name.lastIndexOf('.');
         String extension = dot > 0 ? name.substring(dot + 1).toLowerCase() : "";
         String type = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension);
