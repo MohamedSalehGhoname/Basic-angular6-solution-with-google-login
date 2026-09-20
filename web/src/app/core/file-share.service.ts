@@ -59,6 +59,10 @@ export class FileShareService {
   private readonly _transfers = signal<FileTransfer[]>([]);
   readonly transfers = this._transfers.asReadonly();
 
+  private readonly _savedTo = signal<string | null>(null);
+  /** Where the last phone download was saved, e.g. "Download/report.pdf". */
+  readonly savedTo = this._savedTo.asReadonly();
+
   /** Sends (and shared text) that arrived while the vault was locked. */
   private waiting: FileSendRequest[] = [];
   private waitingTexts: string[] = [];
@@ -195,17 +199,15 @@ export class FileShareService {
         if (file.size > PHONE_FILE_LIMIT) {
           throw new Error('too-large-phone');
         }
-        const uri = await this.native.downloadFile({
+        const savedTo = await this.native.downloadFile({
           id,
           url: await this.api.fileDownloadUrl(file.id),
           name: file.name,
           key: file.key ?? null,
         });
-        // Only offer the share sheet if the user is looking at the app; a
-        // background download just leaves its notification.
-        if (document.visibilityState === 'visible') {
-          await this.native.shareFile(file.name, uri);
-        }
+        // It is saved in the phone's Downloads folder; say so (the app may
+        // have been in the background, where only the notification shows).
+        this._savedTo.set(savedTo);
       } else if (!file.key) {
         // Opened, not fetched: storage URLs are cross-origin.
         const link = document.createElement('a');
@@ -269,6 +271,11 @@ export class FileShareService {
     if (decryptor) {
       await sink.write(await decryptor.finish());
     }
+  }
+
+  /** Clears the "saved to…" note. */
+  dismissSaved(): void {
+    this._savedTo.set(null);
   }
 
   dismiss(id: string): void {

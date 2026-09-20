@@ -31,7 +31,9 @@ public class TransferService extends Service {
     static final String EXTRA_DONE = "done";
     static final String EXTRA_TOTAL = "total";
 
+    private static final String SAVED_CHANNEL = "saved";
     private static int active;
+    private static int savedId = 5000;
     private PowerManager.WakeLock wakeLock;
 
     /** Called when a transfer starts; safe to call for several at once. */
@@ -58,6 +60,35 @@ public class TransferService extends Service {
         if (active == 0) {
             context.stopService(new Intent(context, TransferService.class));
         }
+    }
+
+    /** Tells the user where a finished download went; tapping opens it. */
+    static void notifySaved(Context context, Downloads.Target target) {
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && manager.getNotificationChannel(SAVED_CHANNEL) == null) {
+            manager.createNotificationChannel(
+                new NotificationChannel(SAVED_CHANNEL, "Downloads", NotificationManager.IMPORTANCE_DEFAULT)
+            );
+        }
+        Intent view = new Intent(Intent.ACTION_VIEW)
+            .setDataAndType(target.uri, target.mimeType)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+        PendingIntent tap = PendingIntent.getActivity(
+            context,
+            savedId,
+            view,
+            PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
+        );
+        manager.notify(
+            savedId++,
+            new NotificationCompat.Builder(context, SAVED_CHANNEL)
+                .setContentTitle(target.name)
+                .setContentText("Saved to " + target.displayPath)
+                .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                .setAutoCancel(true)
+                .setContentIntent(tap)
+                .build()
+        );
     }
 
     @Override

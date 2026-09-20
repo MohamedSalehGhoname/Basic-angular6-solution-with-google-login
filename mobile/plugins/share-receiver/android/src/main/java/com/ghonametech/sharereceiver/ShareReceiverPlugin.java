@@ -144,19 +144,20 @@ public class ShareReceiverPlugin extends Plugin {
         String title = "Downloading " + safeName;
         TransferService.begin(getContext(), title);
         fetches.execute(() -> {
-            File dir = new File(getContext().getCacheDir(), "downloads/" + java.util.UUID.randomUUID());
-            File target = new File(dir, safeName);
+            Downloads.Target target = null;
             try {
-                if (!dir.mkdirs()) {
-                    throw new Exception("could not create the download folder");
-                }
+                target = Downloads.create(getContext(), safeName);
                 fetch(id, url, target, key == null ? null : Base64.decode(key, Base64.DEFAULT), title);
+                Downloads.publish(getContext(), target);
+                TransferService.notifySaved(getContext(), target);
                 JSObject result = new JSObject();
-                result.put("uri", "file://" + target.getAbsolutePath());
-                result.put("path", target.getAbsolutePath());
+                result.put("uri", target.uri.toString());
+                result.put("path", target.displayPath);
                 call.resolve(result);
             } catch (Exception e) {
-                deleteTree(dir);
+                if (target != null) {
+                    Downloads.discard(getContext(), target);
+                }
                 call.reject("Download failed: " + e.getMessage(), "failed");
             } finally {
                 TransferService.end(getContext());
@@ -164,7 +165,7 @@ public class ShareReceiverPlugin extends Plugin {
         });
     }
 
-    private void fetch(String id, String url, File target, byte[] key, String title) throws Exception {
+    private void fetch(String id, String url, Downloads.Target target, byte[] key, String title) throws Exception {
         HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
         try {
             connection.setConnectTimeout(30_000);
@@ -187,7 +188,10 @@ public class ShareReceiverPlugin extends Plugin {
                     TransferService.update(getContext(), title, written, total);
                 }
             };
-            try (InputStream in = connection.getInputStream(); OutputStream out = new BufferedOutputStream(new java.io.FileOutputStream(target), 64 * 1024)) {
+            try (
+                InputStream in = connection.getInputStream();
+                OutputStream out = new BufferedOutputStream(Downloads.open(getContext(), target), 64 * 1024)
+            ) {
                 if (key != null) {
                     // Progress here counts plaintext bytes; close enough for a bar.
                     Csf1.decrypt(in, out, key, progress);
@@ -204,8 +208,8 @@ public class ShareReceiverPlugin extends Plugin {
             }
             JSObject done = new JSObject();
             done.put("id", id);
-            done.put("done", target.length());
-            done.put("total", target.length());
+            done.put("done", total > 0 ? total : 1);
+            done.put("total", total > 0 ? total : 1);
             notifyListeners("progress", done);
         } finally {
             connection.disconnect();
@@ -219,6 +223,18 @@ public class ShareReceiverPlugin extends Plugin {
             String permission = android.Manifest.permission.POST_NOTIFICATIONS;
             if (getContext().checkSelfPermission(permission) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
                 getActivity().requestPermissions(new String[] { permission }, 9911);
+            }
+        }
+        call.resolve();
+    }
+
+    /** Android 9 and older need permission to write into Downloads. */
+    @PluginMethod
+    public void requestStorage(PluginCall call) {
+        if (android.os.Build.VERSION.SDK_INT <= 28) {
+            String permission = android.Manifest.permission.WRITE_EXTERNAL_STORAGE;
+            if (getContext().checkSelfPermission(permission) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                getActivity().requestPermissions(new String[] { permission }, 9912);
             }
         }
         call.resolve();

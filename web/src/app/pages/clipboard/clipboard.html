@@ -46,6 +46,13 @@
   <p class="error" role="alert">{{ message }}</p>
 }
 
+@if (files.savedTo(); as saved) {
+  <p class="saved-note" role="status">
+    {{ i18n.t('files.savedTo', { path: saved }) }}
+    <button type="button" class="ghost" (click)="files.dismissSaved()">{{ i18n.t('files.dismiss') }}</button>
+  </p>
+}
+
 @if (files.transfers().length > 0) {
   <ul class="transfers" aria-live="polite">
     @for (transfer of files.transfers(); track transfer.id) {

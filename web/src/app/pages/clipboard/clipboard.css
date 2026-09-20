@@ -265,3 +265,15 @@ button.ghost:hover:not(:disabled) {
     justify-content: flex-end;
   }
 }
+
+.saved-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.875rem;
+  background: var(--primary-soft);
+  border-radius: var(--radius-sm);
+}

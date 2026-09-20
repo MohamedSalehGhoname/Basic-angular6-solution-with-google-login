@@ -84,11 +84,7 @@ describe('FileShareService', () => {
   };
   let addFile: ReturnType<typeof vi.fn>;
   let addText: ReturnType<typeof vi.fn>;
-  let native: {
-    canSaveFile: boolean;
-    downloadFile: ReturnType<typeof vi.fn>;
-    shareFile: ReturnType<typeof vi.fn>;
-  };
+  let native: { canSaveFile: boolean; downloadFile: ReturnType<typeof vi.fn> };
 
   const inject = () => {
     TestBed.configureTestingModule({
@@ -129,8 +125,7 @@ describe('FileShareService', () => {
     addText = vi.fn(async () => null);
     native = {
       canSaveFile: false,
-      downloadFile: vi.fn(async () => 'file:///cache/downloads/x/vector.txt'),
-      shareFile: vi.fn(async () => undefined),
+      downloadFile: vi.fn(async () => 'Download/vector.txt'),
     };
   });
 
@@ -293,8 +288,8 @@ describe('FileShareService', () => {
       name: 'vector.txt',
       key: 'KEY',
     });
-    // Visible in the test environment, so the share sheet is offered.
-    expect(native.shareFile).toHaveBeenCalledWith('vector.txt', 'file:///cache/downloads/x/vector.txt');
+    // Saved into the phone's Downloads folder, and the app says where.
+    expect(service.savedTo()).toBe('Download/vector.txt');
     expect(service.transfers()).toEqual([]);
   });
 
@@ -305,7 +300,7 @@ describe('FileShareService', () => {
     const service = inject();
     await service.download({ id: 'fil_1', name: 'x.bin', size: 10 });
     expect(service.transfers()[0]!.error).toBe('files.error.transfer');
-    expect(native.shareFile).not.toHaveBeenCalled();
+    expect(service.savedTo()).toBeNull();
   });
 
   it('refuses files too large for the phone', async () => {

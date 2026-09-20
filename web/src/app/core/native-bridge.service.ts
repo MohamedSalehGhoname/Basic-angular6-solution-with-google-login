@@ -31,6 +31,7 @@ interface CapacitorGlobal {
         name: string;
         key: string | null;
       }): Promise<{ uri: string; path: string }>;
+      requestStorage?(): Promise<void>;
       requestNotifications?(): Promise<void>;
     };
   };
@@ -88,8 +89,8 @@ export class NativeBridge {
   /**
    * Downloads (and decrypts) a file natively, outside the web page: the
    * phone keeps it running with the app in the background or the screen
-   * off, and progress arrives as ShareReceiver "progress" events. Resolves
-   * with the saved file's uri.
+   * off, and progress arrives as ShareReceiver "progress" events. The file
+   * lands in the phone's Downloads folder; resolves with where it went.
    */
   async downloadFile(args: {
     id: string;
@@ -102,13 +103,9 @@ export class NativeBridge {
       throw new Error('Native download is unavailable');
     }
     await receiver.requestNotifications?.().catch(() => undefined);
-    const { uri } = await receiver.download(args);
-    return uri;
-  }
-
-  /** Opens the phone's share sheet for a saved file, to keep or open it. */
-  async shareFile(name: string, uri: string): Promise<void> {
-    await capacitor()?.Plugins?.Share?.share({ title: name, files: [uri] });
+    await receiver.requestStorage?.().catch(() => undefined);
+    const { path } = await receiver.download(args);
+    return path;
   }
 
   /** Whether a share sheet is available (native, or the Web Share API). */
