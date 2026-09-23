@@ -180,6 +180,28 @@ export function buildApp(options: AppOptions): App {
   });
   fastify.register(websocket);
 
+  // A DELETE (or a bodyless POST) that still carries content-type:
+  // application/json would otherwise be rejected with 400 before it reaches a
+  // route — an easy mismatch to introduce in a client, and a silent one,
+  // since the caller sees only a failure it retries forever.
+  fastify.addContentTypeParser(
+    'application/json',
+    { parseAs: 'string' },
+    (_request, body, done) => {
+      const text = (body as string).trim();
+      if (text.length === 0) {
+        done(null, undefined);
+        return;
+      }
+      try {
+        done(null, JSON.parse(text));
+      } catch (err) {
+        (err as Error & { statusCode?: number }).statusCode = 400;
+        done(err as Error, undefined);
+      }
+    },
+  );
+
   fastify.get('/healthz', async () => ({ ok: true }));
 
   fastify.register(async (api) => {

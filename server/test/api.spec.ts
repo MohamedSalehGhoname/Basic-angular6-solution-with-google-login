@@ -408,3 +408,58 @@ describe('mixed sign-in during the changeover', () => {
     await app.fastify.close();
   });
 });
+
+describe('requests that declare JSON but send no body', () => {
+  let app: App;
+
+  beforeEach(async () => {
+    app = buildApp({ dbPath: ':memory:', verifyToken });
+    await app.fastify.inject({
+      method: 'PUT',
+      url: '/api/clipboard/items/doomed',
+      headers: { ...auth('alice'), 'content-type': 'application/json' },
+      payload: { blob: blob('doomed') },
+    });
+  });
+
+  afterEach(async () => {
+    await app.fastify.close();
+  });
+
+  // Every client sets content-type on all requests; the default parser
+  // rejects that with 400 when there is no body, which silently broke every
+  // delete (the item vanished locally and came back on the next load).
+  it('deletes an item anyway', async () => {
+    const res = await app.fastify.inject({
+      method: 'DELETE',
+      url: '/api/clipboard/items/doomed',
+      headers: { ...auth('alice'), 'content-type': 'application/json' },
+    });
+    expect(res.statusCode).toBe(204);
+    const list = await app.fastify.inject({
+      method: 'GET',
+      url: '/api/clipboard/items',
+      headers: auth('alice'),
+    });
+    expect(list.json().items).toEqual([]);
+  });
+
+  it('clears a collection anyway', async () => {
+    const res = await app.fastify.inject({
+      method: 'DELETE',
+      url: '/api/clipboard/items',
+      headers: { ...auth('alice'), 'content-type': 'application/json' },
+    });
+    expect(res.statusCode).toBe(204);
+  });
+
+  it('still rejects a body that is not valid JSON', async () => {
+    const res = await app.fastify.inject({
+      method: 'PUT',
+      url: '/api/clipboard/items/broken',
+      headers: { ...auth('alice'), 'content-type': 'application/json' },
+      payload: '{not json',
+    });
+    expect(res.statusCode).toBe(400);
+  });
+});

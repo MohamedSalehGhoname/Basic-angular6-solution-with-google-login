@@ -286,6 +286,7 @@ export class VaultService {
       throw new Error('stale-key');
     }
     this.setUnlocked(uid, key);
+    await this.ensureKeyCheck();
   }
 
   lock(): void {

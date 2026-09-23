@@ -87,6 +87,21 @@ describe('BiometricUnlockService', () => {
     expect(await vault.decryptItem(blob)).toBe('still readable');
   });
 
+  it('gives an older vault its key check after a fingerprint unlock', async () => {
+    const service = inject();
+    await service.enable();
+    // A vault made before key checks existed.
+    const stored = JSON.parse(localStorage.getItem('clipsync.vault.test-uid')!);
+    delete stored.keyCheck;
+    localStorage.setItem('clipsync.vault.test-uid', JSON.stringify(stored));
+    vault.lock();
+
+    await service.unlock();
+    expect(vault.status()).toBe('unlocked');
+    const after = JSON.parse(localStorage.getItem('clipsync.vault.test-uid')!);
+    expect(after.keyCheck).toMatch(/^xcv1:/);
+  });
+
   it('stays set up when the prompt is cancelled', async () => {
     const service = inject();
     await service.enable();

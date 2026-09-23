@@ -197,9 +197,13 @@ export class SyncApi {
     const token = await this.auth.idToken();
     const headers: Record<string, string> = {
       authorization: `Bearer ${token}`,
-      'content-type': 'application/json',
       'x-client-id': CLIENT_ID,
     };
+    // Only when something is actually sent: a bodyless request that claims
+    // JSON is rejected by the server's parser.
+    if (body !== undefined) {
+      headers['content-type'] = 'application/json';
+    }
     const accessKey = getAccessKey();
     if (accessKey) {
       headers['x-access-key'] = accessKey;
