@@ -199,10 +199,16 @@ bound to `127.0.0.1:5780` behind the Cloudflare tunnel. Redeploy with
 `bash deploy/deploy.sh`.
 
 Server settings live only in `/opt/ghoclipboard/.env` on the VPS:
-`GTDRIVE_URL`, `GTDRIVE_API_KEY`, and — until Firebase sign-in is configured —
-`INSECURE_DEV_AUTH=1` with `ACCESS_KEY`, a shared secret every device enters
-once on the login page (the production web build sets `accessKeyRequired`).
-Remove both together when real sign-in lands.
+`FIREBASE_PROJECT_ID`, `GTDRIVE_URL` and `GTDRIVE_API_KEY`. Every client signs
+in with Google — the website and desktop app through Firebase's popup, the
+phone through Android's account picker (`mobile/plugins/google-signin`, since
+Google refuses its sign-in page inside a WebView) — and the server accepts
+nothing else.
+
+`INSECURE_DEV_AUTH` (optionally with `DEV_UID_ALIAS`, which maps that identity
+onto a real account) and `ACCESS_KEY`, a shared secret each device enters once,
+exist for local development and for keeping a deployment closed before sign-in
+is configured. Neither is set in production.
 
 ## Mobile client
 
