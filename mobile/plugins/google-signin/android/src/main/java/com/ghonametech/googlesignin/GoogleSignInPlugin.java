@@ -15,7 +15,7 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption;
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption;
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
 import java.util.concurrent.Executors;
 
@@ -38,12 +38,10 @@ public class GoogleSignInPlugin extends Plugin {
             call.reject("Missing serverClientId", "invalid");
             return;
         }
-        GetGoogleIdOption option = new GetGoogleIdOption.Builder()
-            .setServerClientId(serverClientId)
-            // Offer every account on the phone, not only ones already used here.
-            .setFilterByAuthorizedAccounts(false)
-            .setAutoSelectEnabled(false)
-            .build();
+        // The explicit "Sign in with Google" flow: the button the user just
+        // pressed. (GetGoogleIdOption, the one-tap variant, opens the picker
+        // and never returns a result on this phone's selector.)
+        GetSignInWithGoogleOption option = new GetSignInWithGoogleOption.Builder(serverClientId).build();
         GetCredentialRequest request = new GetCredentialRequest.Builder().addCredentialOption(option).build();
 
         CredentialManager.create(getContext())
