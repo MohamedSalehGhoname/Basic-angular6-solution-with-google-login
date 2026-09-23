@@ -10,7 +10,8 @@
     "add:android": "cap add android",
     "add:ios": "cap add ios",
     "open:android": "cap open android",
-    "open:ios": "cap open ios"
+    "open:ios": "cap open ios",
+    "release": "node scripts/build-release.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^7.0.0",

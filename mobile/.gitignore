@@ -6,3 +6,7 @@ www/
 /ios/
 # Gradle output of local plugins.
 plugins/*/android/build/
+
+# Signing key config, if ever placed here (it lives outside the repo).
+*.jks
+*release*.json

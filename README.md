@@ -244,8 +244,20 @@ JAVA_HOME=<jdk-21> ANDROID_HOME=<android-sdk> ./gradlew.bat assembleDebug
 # → android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-For Google sign-in you must still register the package id and OAuth client
-with your Firebase project. Building and
+Release builds are signed outside Gradle so the signing setup survives
+`cap add android` regenerating the native project:
+
+```bash
+cd mobile && npm run release     # -> android/app/build/outputs/apk/release/ClipboardSync-release.apk
+```
+
+It reads the key from a JSON file outside the repository
+(`{ keystore, alias, storePassword, keyPassword }`), by default
+`C:/Users/bslsm/keys/ghoclipboard-release.json`, overridable with
+`CLIPSYNC_ANDROID_KEY`. **Back that keystore up**: without it the app can never
+be updated under the same identity. Every signing key used to build the app
+(debug and release) needs its SHA-1 added to the Firebase Android app, or
+Google sign-in fails in builds signed with it. Building and
 running on a device needs Android Studio / Xcode and is not exercised in CI;
 the `cap` config, the web bundling, and native-project generation with all
 plugins were verified here.
