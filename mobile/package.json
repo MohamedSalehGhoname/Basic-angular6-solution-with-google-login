@@ -22,6 +22,7 @@
     "@capacitor/share": "^7.0.0",
     "@capacitor/status-bar": "^7.0.0",
     "capacitor-biometric-vault": "file:plugins/biometric-vault",
+    "capacitor-google-signin": "file:plugins/google-signin",
     "capacitor-share-receiver": "file:plugins/share-receiver"
   },
   "devDependencies": {

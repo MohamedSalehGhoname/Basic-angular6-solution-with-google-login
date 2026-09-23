@@ -4,17 +4,34 @@ import {
   GoogleAuthProvider,
   getRedirectResult,
   onAuthStateChanged,
+  signInWithCredential,
   signInWithPopup,
   signInWithRedirect,
   signOut,
   type User,
 } from 'firebase/auth';
+import { firebaseConfig } from '../firebase.config';
 import { syncConfig } from '../sync.config';
 import { firebaseAuth } from './firebase';
 import { NativeBridge } from './native-bridge.service';
 
 const DEV_UID = 'local-dev-user';
 const DEV_FLAG = 'clipsync.devSignedIn';
+
+/**
+ * The phone app's native sign-in (mobile/plugins/google-signin). Google
+ * refuses to show its sign-in page inside an app's WebView, so the phone
+ * uses Android's own account picker and hands back an ID token.
+ */
+interface GoogleSignInPlugin {
+  signIn(options: { serverClientId: string }): Promise<{ idToken: string }>;
+  signOut(): Promise<void>;
+}
+
+function nativeGoogle(): GoogleSignInPlugin | undefined {
+  return (window as unknown as { Capacitor?: { Plugins?: { GoogleSignIn?: GoogleSignInPlugin } } })
+    .Capacitor?.Plugins?.GoogleSignIn;
+}
 
 /** Fixed identity used when syncConfig.devAuth is on (no Firebase). */
 function devUser(): User {
@@ -67,15 +84,28 @@ export class AuthService {
     }
     const provider = new GoogleAuthProvider();
     try {
+      const google = nativeGoogle();
+      if (google) {
+        // The phone: Android's account picker, then the same Firebase session
+        // the website and desktop app get.
+        const { idToken } = await google.signIn({ serverClientId: firebaseConfig.googleWebClientId });
+        await signInWithCredential(firebaseAuth, GoogleAuthProvider.credential(idToken));
+        await this.router.navigateByUrl(returnUrl);
+        return;
+      }
       if (this.native.isNative) {
-        // Popups do not work inside a mobile WebView; use a full-page redirect.
-        // Firebase restores the session on return and onAuthStateChanged fires.
+        // An older phone build without the plugin: a full-page redirect is the
+        // only WebView-compatible flow Firebase offers.
         await signInWithRedirect(firebaseAuth, provider);
         return;
       }
       await signInWithPopup(firebaseAuth, provider);
       await this.router.navigateByUrl(returnUrl);
     } catch (err) {
+      const code = (err as { code?: string }).code;
+      if (code === 'cancelled') {
+        return;
+      }
       this.error.set(err instanceof Error ? err.message : 'Sign-in failed.');
     }
   }
@@ -100,6 +130,8 @@ export class AuthService {
       return;
     }
     await signOut(firebaseAuth);
+    // Forget the chosen account so the picker asks again next time.
+    await nativeGoogle()?.signOut().catch(() => undefined);
     await this.router.navigateByUrl('/login');
   }
 

@@ -9,4 +9,10 @@ export const firebaseConfig = {
   storageBucket: 'ghoclipboard.firebasestorage.app',
   messagingSenderId: '178287372678',
   appId: '1:178287372678:web:6eacd291d747509e87e407',
+
+  // OAuth Web client id, used by the phone's native sign-in (Android hands
+  // back an ID token issued for this id, which Firebase then accepts).
+  // Firebase console ▸ Authentication ▸ Sign-in method ▸ Google ▸ Web SDK
+  // configuration.
+  googleWebClientId: '',
 };
