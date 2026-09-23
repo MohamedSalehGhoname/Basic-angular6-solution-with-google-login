@@ -1,0 +1,160 @@
+<div class="page-head">
+  <h1>{{ i18n.t('clipboard.title') }}</h1>
+  <div class="head-actions">
+    @if (desktop.available) {
+      <label class="capture-toggle" [title]="i18n.t('clipboard.captureTitle')">
+        <input
+          type="checkbox"
+          [checked]="desktop.enabled()"
+          (change)="desktop.setEnabled($any($event.target).checked)"
+        />
+        {{ i18n.t('clipboard.capture') }}
+      </label>
+    }
+    @if (store.items().length > 0) {
+      <button type="button" class="ghost" (click)="clear()">{{ i18n.t('clipboard.clearAll') }}</button>
+    }
+  </div>
+</div>
+
+<form class="composer" (ngSubmit)="add()">
+  <textarea
+    name="draft"
+    [(ngModel)]="draft"
+    rows="3"
+    [placeholder]="i18n.t('clipboard.placeholder')"
+  ></textarea>
+  <div class="composer-actions">
+    <label class="ttl">
+      {{ i18n.t('clipboard.expireAfter') }}
+      <select (change)="onTtlChange($any($event.target).value)">
+        @for (option of ttlOptions; track option.label) {
+          <option [value]="option.ms" [selected]="store.ttlMs() === option.ms">
+            {{ ttlLabel(option.ms) }}
+          </option>
+        }
+      </select>
+    </label>
+    <button type="button" class="ghost" (click)="pasteFromClipboard()">
+      {{ i18n.t('clipboard.paste') }}
+    </button>
+    <button type="submit" [disabled]="!draft.trim()">{{ i18n.t('clipboard.add') }}</button>
+  </div>
+</form>
+
+@if (error(); as message) {
+  <p class="error" role="alert">{{ message }}</p>
+}
+
+@if (files.savedTo(); as saved) {
+  <p class="saved-note" role="status">
+    <span>{{ i18n.t('files.savedTo', { path: saved.path }) }}</span>
+    <span class="saved-actions">
+      <button type="button" (click)="files.openSaved()">{{ i18n.t('files.open') }}</button>
+      <button type="button" class="ghost" (click)="files.dismissSaved()">{{ i18n.t('files.dismiss') }}</button>
+    </span>
+  </p>
+}
+
+@if (files.transfers().length > 0) {
+  <ul class="transfers" aria-live="polite">
+    @for (transfer of files.transfers(); track transfer.id) {
+      <li [class.failed]="!!transfer.error">
+        <span class="transfer-label">
+          @if (transfer.error) {
+            {{ transfer.name }} — {{ i18n.t(transfer.error) }}
+          } @else if (transfer.waiting) {
+            {{ i18n.t('files.waitingUnlock', { name: transfer.name }) }}
+          } @else {
+            {{ i18n.t(transfer.direction === 'up' ? 'files.sending' : 'files.downloading', { name: transfer.name }) }}
+            <span class="muted">{{ percent(transfer.done, transfer.total) }}%</span>
+          }
+        </span>
+        @if (transfer.error) {
+          <button type="button" class="ghost" (click)="files.dismiss(transfer.id)">
+            {{ i18n.t('files.dismiss') }}
+          </button>
+        } @else if (!transfer.waiting) {
+          <progress [value]="transfer.done" [max]="transfer.total || 1"></progress>
+        }
+      </li>
+    }
+  </ul>
+}
+
+@if (!loading() && !store.online()) {
+  <p class="muted">{{ i18n.t('clipboard.offline') }}</p>
+}
+
+@if (loading()) {
+  <p class="muted">{{ i18n.t('clipboard.decrypting') }}</p>
+} @else if (store.items().length === 0) {
+  <div class="empty-state">
+    <p>{{ i18n.t('clipboard.empty') }}</p>
+    <p class="hint">{{ i18n.t('clipboard.emptyHint') }}</p>
+  </div>
+} @else {
+  @if (store.skipped() > 0) {
+    <p class="muted">{{ i18n.t('clipboard.skipped', { n: store.skipped() }) }}</p>
+  }
+  <input
+    class="search"
+    type="search"
+    [ngModel]="search()"
+    (ngModelChange)="search.set($event)"
+    [placeholder]="i18n.t('clipboard.search')"
+    [attr.aria-label]="i18n.t('clipboard.search')"
+  />
+  @if (filtered().length === 0) {
+    <p class="muted">{{ i18n.t('clipboard.noMatch', { q: search() }) }}</p>
+  }
+  <ul class="items">
+    @for (item of filtered(); track item.id) {
+      <li>
+        <div class="content">
+          @if (item.file; as file) {
+            <span class="preview file-preview">
+              <span class="file-icon" aria-hidden="true">📎</span>
+              <span class="file-name">{{ file.name }}</span>
+              <span class="file-size">{{ formatSize(file.size) }}</span>
+              @if (file.key) {
+                <span class="badge">🔒 {{ i18n.t('clipboard.encryptedFile') }}</span>
+              }
+            </span>
+          } @else if (item.image) {
+            <a [href]="item.image" [download]="item.text" target="_blank" rel="noopener" class="img-preview">
+              <img [src]="item.image" [alt]="item.text" />
+            </a>
+          } @else {
+            <span class="preview">{{ item.text }}</span>
+          }
+          <span class="meta">
+            {{ item.device }} · {{ item.copiedAt | date: 'short' }}
+            @if (item.expiresAt != null) {
+              · {{ i18n.t('clipboard.expires', { d: (item.expiresAt | date: 'short') ?? '' }) }}
+            }
+          </span>
+        </div>
+        <div class="actions">
+          <button type="button" (click)="copy(item)">
+            {{
+              item.file
+                ? i18n.t('clipboard.download')
+                : copiedId() === item.id
+                  ? i18n.t('clipboard.copied')
+                  : i18n.t('clipboard.copy')
+            }}
+          </button>
+          @if (native.canShare && !item.image && !item.file) {
+            <button type="button" class="ghost" (click)="share(item)">
+              {{ i18n.t('clipboard.share') }}
+            </button>
+          }
+          <button type="button" class="ghost" (click)="remove(item.id)">
+            {{ i18n.t('clipboard.delete') }}
+          </button>
+        </div>
+      </li>
+    }
+  </ul>
+}

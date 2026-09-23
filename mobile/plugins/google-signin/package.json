@@ -1,0 +1,12 @@
+{
+  "name": "capacitor-google-signin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Google sign-in for Clipboard Sync through Android Credential Manager, since Google refuses its sign-in page inside a WebView.",
+  "main": "index.js",
+  "capacitor": {
+    "android": {
+      "src": "android"
+    }
+  }
+}

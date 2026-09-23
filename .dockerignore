@@ -1,0 +1,9 @@
+**/node_modules
+server/dist
+**/*.db*
+.git
+.claude
+desktop
+mobile
+web/src
+web/.angular
