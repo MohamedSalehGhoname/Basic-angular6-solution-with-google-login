@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp, type App } from '../src/app.js';
+import { firstMatching, insecureDevVerifier } from '../src/auth.js';
 
 // Stub verifier: tokens look like "token-<uid>".
 const verifyToken = async (token: string) => {
@@ -305,5 +306,54 @@ describe('sync API', () => {
       headers: auth('alice'),
     });
     expect(list.json().items.map((i: { id: string }) => i.id)).toEqual(['s2', 's1']);
+  });
+});
+
+describe('mixed sign-in during the changeover', () => {
+  const real = async (token: string) => {
+    if (token !== 'google-token') {
+      throw new Error('not a Google token');
+    }
+    return { uid: 'firebase-uid-1' };
+  };
+
+  it('accepts real tokens and maps the dev identity onto the same account', async () => {
+    const app = buildApp({
+      dbPath: ':memory:',
+      verifyToken: firstMatching(real, insecureDevVerifier('firebase-uid-1')),
+    });
+    const put = (token: string, id: string) =>
+      app.fastify.inject({
+        method: 'PUT',
+        url: `/api/clipboard/items/${id}`,
+        headers: { authorization: `Bearer ${token}` },
+        payload: { blob: blob(id) },
+      });
+
+    expect((await put('google-token', 'from-web')).statusCode).toBe(204);
+    expect((await put('local-dev-user', 'from-phone')).statusCode).toBe(204);
+
+    // Both clients see one vault, not two.
+    const list = await app.fastify.inject({
+      method: 'GET',
+      url: '/api/clipboard/items',
+      headers: { authorization: 'Bearer google-token' },
+    });
+    expect(list.json().items.map((item: { id: string }) => item.id).sort()).toEqual([
+      'from-phone',
+      'from-web',
+    ]);
+    await app.fastify.close();
+  });
+
+  it('still rejects a token no verifier accepts', async () => {
+    const app = buildApp({ dbPath: ':memory:', verifyToken: firstMatching(real) });
+    const res = await app.fastify.inject({
+      method: 'GET',
+      url: '/api/clipboard/items',
+      headers: { authorization: 'Bearer nope' },
+    });
+    expect(res.statusCode).toBe(401);
+    await app.fastify.close();
   });
 });
