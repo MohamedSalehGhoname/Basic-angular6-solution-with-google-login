@@ -1,9 +1,9 @@
 // Build bundled into the phone app (angular.json "mobile" configuration).
-// Google blocks its sign-in page inside an app's WebView, so the phone keeps
-// the dev identity — which the server maps onto the owner's real account —
-// plus the access key, until native Google sign-in is added.
+// The phone signs in with the real Google account through Android's account
+// picker (mobile/plugins/google-signin). The access key stays only until the
+// server stops accepting the old dev identity.
 export const syncConfig = {
   apiBaseUrl: 'https://ghoclipboard.ghonameservices.com',
-  devAuth: true,
+  devAuth: false,
   accessKeyRequired: true,
 };

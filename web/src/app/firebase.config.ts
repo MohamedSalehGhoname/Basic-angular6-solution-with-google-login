@@ -14,5 +14,5 @@ export const firebaseConfig = {
   // back an ID token issued for this id, which Firebase then accepts).
   // Firebase console ▸ Authentication ▸ Sign-in method ▸ Google ▸ Web SDK
   // configuration.
-  googleWebClientId: '',
+  googleWebClientId: '178287372678-hqv7gdudvhf581khfpu0gjk1ipgekdpn.apps.googleusercontent.com',
 };
