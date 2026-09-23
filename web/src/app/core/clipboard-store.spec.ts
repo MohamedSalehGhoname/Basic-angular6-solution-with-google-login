@@ -76,6 +76,24 @@ describe('ClipboardStore', () => {
     expect(store.items().map((item) => item.text)).toEqual(['from phone', 'mine']);
   });
 
+  it('never uploads a local mirror left behind by a different vault', async () => {
+    // What a replaced vault (or another account) wrote into this browser.
+    localStorage.setItem(
+      'clipsync.clipboard.test-uid',
+      JSON.stringify({
+        version: 1,
+        items: [{ id: 'foreign-1', blob: 'xcv1:written-by-another-vault' }],
+        deleted: [],
+      }),
+    );
+    await store.load();
+
+    expect(syncApi.items.size).toBe(0);
+    expect(store.items()).toEqual([]);
+    // Reported once, then gone from the mirror.
+    expect(store.skipped()).toBe(1);
+  });
+
   it('ignores empty input', async () => {
     expect(await store.add('   ')).toBeNull();
     expect(store.items()).toEqual([]);

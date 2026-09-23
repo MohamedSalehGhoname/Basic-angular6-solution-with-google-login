@@ -106,6 +106,13 @@ export abstract class SyncedCollection<T extends object> {
       const remoteIds = new Set(remote.map((item) => item.id));
       const localOnly = storedItems.filter((item) => !remoteIds.has(item.id));
       for (const item of localOnly) {
+        // Only what this vault can read goes up: a mirror left by a different
+        // vault (another account, or one that was replaced) would otherwise
+        // be uploaded as items nobody can ever decrypt. Unreadable blobs are
+        // still counted below, so the user hears about them once.
+        if (!(await this.canDecrypt(item.blob))) {
+          continue;
+        }
         try {
           await this.syncApi.putItem(this.collection, item.id, item.blob);
         } catch {
@@ -174,6 +181,16 @@ export abstract class SyncedCollection<T extends object> {
     this.disconnect = null;
     this.loadedUid = null;
     await this.load();
+  }
+
+  /** Whether the unlocked vault can read this blob. */
+  private async canDecrypt(blob: string): Promise<boolean> {
+    try {
+      await this.vault.decryptItem(blob);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /** Hook for per-collection preferences to load before items. */
