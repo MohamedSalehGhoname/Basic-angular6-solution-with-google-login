@@ -10,3 +10,5 @@ plugins/*/android/build/
 # Signing key config, if ever placed here (it lives outside the repo).
 *.jks
 *release*.json
+assets/
+play-assets/

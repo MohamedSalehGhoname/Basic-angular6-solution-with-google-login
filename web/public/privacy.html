@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Privacy Policy · GhoClipboard</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        max-width: 44rem;
+        margin: 0 auto;
+        padding: 2.5rem 1.25rem 5rem;
+        font: 16px/1.65 system-ui, "Segoe UI", sans-serif;
+        color: #16181d;
+        background: #fff;
+      }
+      h1 { font-size: 1.7rem; margin-bottom: 0.25rem; }
+      h2 { font-size: 1.15rem; margin-top: 2.25rem; }
+      .updated { color: #6b7280; margin-top: 0; }
+      code { background: #f1f3f5; padding: 0.1rem 0.3rem; border-radius: 4px; }
+      @media (prefers-color-scheme: dark) {
+        body { color: #e6e8eb; background: #0f1216; }
+        .updated { color: #8a929c; }
+        code { background: #21262e; }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>GhoClipboard — Privacy Policy</h1>
+    <p class="updated">Last updated: 23 September 2026</p>
+
+    <p>
+      GhoClipboard keeps a clipboard, passwords and files in step across your devices. It is built
+      so that the people running the service cannot read what you store in it.
+    </p>
+
+    <h2>What the app stores for you</h2>
+    <ul>
+      <li>Clipboard entries (text and images) that you add or that the desktop app captures.</li>
+      <li>Password entries and the groups you file them in.</li>
+      <li>Files you send to the clipboard.</li>
+    </ul>
+    <p>
+      All of it is encrypted on your device with a key derived from your passphrase before it is
+      sent anywhere. The passphrase never leaves your device and is never transmitted. The server
+      holds unreadable ciphertext; nobody operating the service, and nobody who obtained a copy of
+      the database, can decrypt it. Losing the passphrase and the recovery code means the data
+      cannot be recovered by anyone, including us.
+    </p>
+
+    <h2>What the service can see</h2>
+    <ul>
+      <li>
+        <strong>Your account identifier and email address</strong>, from signing in with Google.
+        This identifies which encrypted items belong to you.
+      </li>
+      <li>
+        <strong>Technical facts</strong> needed to run the service: the size and timing of items,
+        the number of files, and ordinary web server logs (IP address, time of request).
+      </li>
+    </ul>
+    <p>We do not use advertising, analytics or tracking of any kind, and we profile nobody.</p>
+
+    <h2>Files</h2>
+    <p>
+      Files you send are stored with GTDrive (<code>drive.ghonameservices.com</code>), operated by
+      the same publisher on Cloudflare R2. With file encryption on — the default — the file is
+      encrypted on your device first and stored under a random name, so the storage holds only
+      ciphertext. If you turn encryption off, files are stored as they are, under their own name.
+      Stored files are deleted automatically after the retention period set for the service.
+    </p>
+
+    <h2>Permissions the Android app asks for</h2>
+    <ul>
+      <li><strong>Internet</strong> — to sync with the server.</li>
+      <li><strong>Notifications</strong> — to show transfer progress and completed downloads.</li>
+      <li>
+        <strong>Biometrics</strong> — optional; unlocks your vault with your fingerprint. The
+        fingerprint stays in the phone's secure hardware and is never sent anywhere.
+      </li>
+      <li>
+        <strong>Storage (Android 9 and older)</strong> — to save downloads into your Downloads
+        folder. Newer versions need no permission for this.
+      </li>
+    </ul>
+    <p>
+      The app reads the clipboard only on desktop computers, and only while you have "Capture
+      copies" switched on. Android does not permit background clipboard access and the app does
+      not attempt it: on a phone, content arrives only when you share it to the app deliberately.
+    </p>
+
+    <h2>Sharing</h2>
+    <p>
+      Your data is not sold, rented or shared with third parties. It passes through the
+      infrastructure needed to deliver the service: the hosting provider, Cloudflare (which carries
+      the traffic), Google (sign-in only), and the file storage described above.
+    </p>
+
+    <h2>Deleting your data</h2>
+    <p>
+      You can delete any item, or clear a whole collection, from inside the app. To remove your
+      account and everything stored for it, write to the address below and it will be deleted from
+      the server.
+    </p>
+
+    <h2>Children</h2>
+    <p>The service is not directed at children under 13.</p>
+
+    <h2>Changes</h2>
+    <p>
+      If this policy changes, the date at the top changes with it, and material changes will be
+      announced in the app.
+    </p>
+
+    <h2>Contact</h2>
+    <p>
+      GhoMicrosystems — <a href="mailto:info@ghomicrosystems.com">info@ghomicrosystems.com</a>
+    </p>
+  </body>
+</html>

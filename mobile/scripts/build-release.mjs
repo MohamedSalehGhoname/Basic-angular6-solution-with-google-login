@@ -1,6 +1,7 @@
-// Builds a signed release APK.
+// Builds a signed release APK, or the app bundle Play wants.
 //
-//   npm run release
+//   npm run release        -> ClipboardSync-release.apk  (sideloading, testing)
+//   npm run bundle         -> ClipboardSync-release.aab  (Google Play upload)
 //
 // The signing key is deliberately outside the repository and never
 // committed: point KEY_CONFIG (or the CLIPSYNC_ANDROID_KEY env var) at a JSON
@@ -11,7 +12,7 @@
 // The release APK is signed with a different key than the debug ones, so a
 // phone with a debug build installed must uninstall it first.
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { copyFileSync, existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -50,6 +51,31 @@ run('npm', ['run', 'bundle:web'], { cwd: mobileDir, shell: true });
 // bundle:web only fills mobile/www; the native project gets its copy here.
 console.log('==> Syncing the native project');
 run('npx', ['cap', 'sync', 'android'], { cwd: mobileDir, shell: true });
+
+const wantsBundle = process.argv.includes('--bundle');
+
+if (wantsBundle) {
+  console.log('==> Building the app bundle');
+  run(join(androidDir, 'gradlew.bat'), ['bundleRelease'], { cwd: androidDir });
+  const aab = join(androidDir, 'app/build/outputs/bundle/release/app-release.aab');
+  const signedAab = join(androidDir, 'app/build/outputs/bundle/release/ClipboardSync-release.aab');
+  copyFileSync(aab, signedAab);
+  // An .aab is a jar, so it is signed with jarsigner rather than apksigner.
+  // Play re-signs it with the app signing key; this key is the upload key.
+  console.log('==> Signing the bundle');
+  run(join(JAVA_HOME, 'bin/jarsigner.exe'), [
+    '-keystore', key.keystore,
+    '-storepass', key.storePassword,
+    '-keypass', key.keyPassword,
+    '-digestalg', 'SHA-256',
+    '-sigalg', 'SHA256withRSA',
+    signedAab,
+    key.alias,
+  ]);
+  console.log(`
+==> ${signedAab}`);
+  process.exit(0);
+}
 
 console.log('==> Building the release APK');
 run(join(androidDir, 'gradlew.bat'), ['assembleRelease'], { cwd: androidDir });

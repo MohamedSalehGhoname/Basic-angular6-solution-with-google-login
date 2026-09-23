@@ -1,6 +1,6 @@
 {
   "appId": "com.ghomicrosystems.ghoclipboard",
-  "appName": "Clipboard Sync",
+  "appName": "GhoClipboard",
   "webDir": "www",
   "backgroundColor": "#0f1216",
   "android": {
