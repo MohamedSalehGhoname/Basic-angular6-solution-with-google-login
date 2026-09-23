@@ -15,6 +15,12 @@ interface VaultMetadata extends WrappedKeyRecord {
   version: 1;
   /** Optional recovery-code-wrapped copy of the same vault key. */
   recovery?: WrappedKeyRecord;
+  /**
+   * Ciphertext only this vault's key opens. It lets a device notice that the
+   * vault was replaced elsewhere — its own key is then stale, and anything it
+   * writes would be unreadable to every other device.
+   */
+  keyCheck?: string;
 }
 
 /**
@@ -83,8 +89,10 @@ export class VaultService {
           opsLimit: remote.opsLimit,
           memLimit: remote.memLimit,
           wrappedKey: remote.wrappedKey,
+          keyCheck: remote.keyCheck,
           recovery: remote.recovery,
         });
+        await this.lockIfKeyIsStale(remote.keyCheck);
       } else {
         const local = this.readMetadata(uid);
         if (local) {
@@ -102,11 +110,60 @@ export class VaultService {
     const kdf = params ?? (await this.crypto.defaultKdfParams());
     const vaultKey = await this.crypto.generateVaultKey();
     const wrapped = await this.wrapWith(passphrase, vaultKey, kdf);
-    const metadata: VaultMetadata = { version: 1, ...wrapped };
+    const metadata: VaultMetadata = {
+      version: 1,
+      ...wrapped,
+      keyCheck: await this.crypto.encryptItem(KEY_CHECK_TEXT, vaultKey),
+    };
 
     this.writeMetadata(uid, metadata);
     this.setUnlocked(uid, vaultKey);
     await this.pushMetadata(uid, metadata);
+  }
+
+  /**
+   * Called when another device changed the vault record: if the vault was
+   * replaced, this session's key can no longer read it, so lock rather than
+   * keep writing items nobody can decrypt.
+   */
+  async onRemoteVaultChanged(): Promise<void> {
+    if (this.status() !== 'unlocked') {
+      return;
+    }
+    try {
+      const remote = await this.syncApi.getVault();
+      if (!remote) {
+        return;
+      }
+      const uid = this.requireUid();
+      this.writeMetadata(uid, {
+        version: 1,
+        salt: remote.salt,
+        opsLimit: remote.opsLimit,
+        memLimit: remote.memLimit,
+        wrappedKey: remote.wrappedKey,
+        keyCheck: remote.keyCheck,
+        recovery: remote.recovery,
+      });
+      await this.lockIfKeyIsStale(remote.keyCheck);
+    } catch {
+      // Offline: the local record stands until the server is reachable.
+    }
+  }
+
+  /** Locks when the vault's check value no longer opens with our key. */
+  private async lockIfKeyIsStale(keyCheck: string | undefined): Promise<void> {
+    if (!keyCheck || !this.vaultKey || this.status() !== 'unlocked') {
+      return;
+    }
+    try {
+      if ((await this.crypto.decryptItem(keyCheck, this.vaultKey)) === KEY_CHECK_TEXT) {
+        return;
+      }
+    } catch {
+      // Falls through to locking.
+    }
+    this.lock();
   }
 
   async unlock(passphrase: string): Promise<void> {
@@ -119,6 +176,8 @@ export class VaultService {
       throw new Error('Incorrect passphrase.');
     });
     this.setUnlocked(uid, vaultKey);
+    // Vaults made before the key check gain one on the next unlock.
+    await this.ensureKeyCheck();
   }
 
   async unlockWithRecoveryCode(code: string): Promise<void> {
@@ -131,9 +190,24 @@ export class VaultService {
       throw new Error('Incorrect recovery code.');
     });
     this.setUnlocked(uid, vaultKey);
+    await this.ensureKeyCheck();
   }
 
-  /** Re-wraps the vault key under a new passphrase. Requires the vault unlocked. */
+  /** Adds the key check to a vault made before it existed. */
+  async ensureKeyCheck(): Promise<void> {
+    const uid = this.auth.user()?.uid;
+    const metadata = uid ? this.readMetadata(uid) : null;
+    if (!uid || !metadata || metadata.keyCheck || this.status() !== 'unlocked') {
+      return;
+    }
+    const updated: VaultMetadata = {
+      ...metadata,
+      keyCheck: await this.encryptItem(KEY_CHECK_TEXT),
+    };
+    this.writeMetadata(uid, updated);
+    await this.pushMetadata(uid, updated);
+  }
+
   async changePassphrase(current: string, next: string): Promise<void> {
     const uid = this.requireUid();
     const metadata = this.readMetadata(uid);
@@ -270,6 +344,7 @@ export class VaultService {
       opsLimit: metadata.opsLimit,
       memLimit: metadata.memLimit,
       wrappedKey: metadata.wrappedKey,
+      keyCheck: metadata.keyCheck,
       recovery: metadata.recovery,
     };
   }

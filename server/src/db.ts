@@ -5,6 +5,11 @@ export interface VaultRecord {
   opsLimit: number;
   memLimit: number;
   wrappedKey: string;
+  /**
+   * Ciphertext only the current vault key opens, so a device can tell its
+   * key went stale (the vault was replaced elsewhere) and lock itself.
+   */
+  keyCheck?: string;
   /** Optional recovery-code-wrapped copy of the vault key, stored opaquely. */
   recovery?: unknown;
   updatedAt: number;
@@ -33,6 +38,7 @@ export class SyncDb {
         ops_limit   INTEGER NOT NULL,
         mem_limit   INTEGER NOT NULL,
         wrapped_key TEXT NOT NULL,
+        key_check   TEXT,
         recovery    TEXT,
         updated_at  INTEGER NOT NULL
       );
@@ -53,6 +59,16 @@ export class SyncDb {
         created_at INTEGER NOT NULL
       );
     `);
+    // Databases created before the key check gain the column here.
+    this.addColumnIfMissing('vaults', 'key_check');
+  }
+
+  /** Adds an optional TEXT column to an existing table, once. */
+  private addColumnIfMissing(table: string, column: string): void {
+    const columns = this.db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+    if (!columns.some((c) => c.name === column)) {
+      this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} TEXT`);
+    }
   }
 
   /** Records which user a stored file belongs to; storage ids are global. */
@@ -72,7 +88,7 @@ export class SyncDb {
   getVault(uid: string): VaultRecord | null {
     const row = this.db
       .prepare(
-        'SELECT salt, ops_limit, mem_limit, wrapped_key, recovery, updated_at FROM vaults WHERE uid = ?',
+        'SELECT salt, ops_limit, mem_limit, wrapped_key, key_check, recovery, updated_at FROM vaults WHERE uid = ?',
       )
       .get(uid) as
       | {
@@ -80,6 +96,7 @@ export class SyncDb {
           ops_limit: number;
           mem_limit: number;
           wrapped_key: string;
+          key_check: string | null;
           recovery: string | null;
           updated_at: number;
         }
@@ -92,6 +109,7 @@ export class SyncDb {
       opsLimit: row.ops_limit,
       memLimit: row.mem_limit,
       wrappedKey: row.wrapped_key,
+      keyCheck: row.key_check ?? undefined,
       recovery: row.recovery ? JSON.parse(row.recovery) : undefined,
       updatedAt: row.updated_at,
     };
@@ -102,17 +120,27 @@ export class SyncDb {
     const recovery = vault.recovery === undefined ? null : JSON.stringify(vault.recovery);
     this.db
       .prepare(
-        `INSERT INTO vaults (uid, salt, ops_limit, mem_limit, wrapped_key, recovery, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO vaults (uid, salt, ops_limit, mem_limit, wrapped_key, key_check, recovery, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (uid) DO UPDATE SET
            salt = excluded.salt,
            ops_limit = excluded.ops_limit,
            mem_limit = excluded.mem_limit,
            wrapped_key = excluded.wrapped_key,
+           key_check = excluded.key_check,
            recovery = excluded.recovery,
            updated_at = excluded.updated_at`,
       )
-      .run(uid, vault.salt, vault.opsLimit, vault.memLimit, vault.wrappedKey, recovery, updatedAt);
+      .run(
+        uid,
+        vault.salt,
+        vault.opsLimit,
+        vault.memLimit,
+        vault.wrappedKey,
+        vault.keyCheck ?? null,
+        recovery,
+        updatedAt,
+      );
     return { ...vault, updatedAt };
   }
 

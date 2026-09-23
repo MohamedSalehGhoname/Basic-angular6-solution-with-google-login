@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import sodium from 'libsodium-wrappers-sumo';
 import { FakeSyncApi } from '../testing/fake-sync-api';
 import { AuthService } from './auth.service';
-import { type KdfParams } from './crypto.service';
+import { CryptoService, type KdfParams } from './crypto.service';
 import { SyncApi } from './sync-api';
 import { VaultService } from './vault.service';
 
@@ -133,6 +133,41 @@ describe('VaultService', () => {
     expect(await service.decryptItem(blob)).toBe('survives passphrase change');
     // Three derivations at the real (moderate, 256 MiB) cost, not the fast test KDF.
   }, 30_000);
+
+  it('locks itself when the vault was replaced on another device', async () => {
+    await service.createVault('a long passphrase', fastKdf);
+    const blob = await service.encryptItem('written before the replacement');
+    expect(service.status()).toBe('unlocked');
+
+    // Another device creates a brand new vault for the same account: our key
+    // can no longer read it, so anything we wrote from here on would be
+    // unreadable to every device.
+    const other = TestBed.inject(CryptoService);
+    const foreignKey = await other.generateVaultKey();
+    syncApi.vault = {
+      salt: 'c2FsdA',
+      opsLimit: fastKdf.opsLimit,
+      memLimit: fastKdf.memLimit,
+      wrappedKey: await other.wrapKey(foreignKey, foreignKey),
+      keyCheck: await other.encryptItem('clipsync-vault-key-check-v1', foreignKey),
+    };
+
+    await service.onRemoteVaultChanged();
+    expect(service.status()).toBe('locked');
+    // The old ciphertext is still readable once the right passphrase is back.
+    await expect(service.decryptItem(blob)).rejects.toThrow();
+  });
+
+  it('stays unlocked when the vault record changed but the key still fits', async () => {
+    await service.createVault('a long passphrase', fastKdf);
+    const before = await service.encryptItem('still ours');
+    // A passphrase change elsewhere re-wraps the same key; the check still opens.
+    syncApi.vault = { ...syncApi.vault!, salt: 'bmV3c2FsdA' };
+
+    await service.onRemoteVaultChanged();
+    expect(service.status()).toBe('unlocked');
+    expect(await service.decryptItem(before)).toBe('still ours');
+  });
 
   it('rejects a passphrase change with the wrong current passphrase', async () => {
     await service.createVault('a long passphrase', fastKdf);

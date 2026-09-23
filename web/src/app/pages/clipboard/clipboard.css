@@ -283,3 +283,9 @@ button.ghost:hover:not(:disabled) {
   flex-shrink: 0;
   gap: 0.4rem;
 }
+
+.skipped-note {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}

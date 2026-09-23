@@ -53,6 +53,8 @@ const vaultBodySchema = {
   additionalProperties: false,
   properties: {
     ...wrappedKeyProps,
+    // Ciphertext a device decrypts to check its key is still the vault's.
+    keyCheck: { type: 'string', pattern: BLOB_PATTERN, maxLength: 1024 },
     // Optional recovery-code-wrapped copy of the vault key.
     recovery: {
       type: 'object',

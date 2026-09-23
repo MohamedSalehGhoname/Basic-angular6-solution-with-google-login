@@ -94,6 +94,22 @@ describe('ClipboardStore', () => {
     expect(store.skipped()).toBe(1);
   });
 
+  it('clears out items it cannot decrypt when asked', async () => {
+    await store.add('mine');
+    // What a replaced vault left on the server: readable by nobody.
+    syncApi.items.set('foreign-1', { blob: 'xcv1:written-by-another-vault', createdAt: Date.now() });
+    syncApi.items.set('foreign-2', { blob: 'xcv1:also-not-ours', createdAt: Date.now() });
+    await store.load();
+    expect(store.skipped()).toBe(2);
+    expect(store.items().map((item) => item.text)).toEqual(['mine']);
+
+    store.removeSkipped();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(store.skipped()).toBe(0);
+    expect([...syncApi.items.keys()]).toHaveLength(1);
+    expect(store.items().map((item) => item.text)).toEqual(['mine']);
+  });
+
   it('ignores empty input', async () => {
     expect(await store.add('   ')).toBeNull();
     expect(store.items()).toEqual([]);

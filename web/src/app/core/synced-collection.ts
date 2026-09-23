@@ -39,6 +39,8 @@ export abstract class SyncedCollection<T extends object> {
   private readonly _skipped = signal(0);
   /** Items that failed to decrypt on the last load (corrupt or foreign blobs). */
   readonly skipped = this._skipped.asReadonly();
+  /** Their ids, so the user can clear them out (see removeSkipped). */
+  private skippedIds: string[] = [];
 
   private readonly _online = signal(false);
   /** Live connectivity to the sync server. */
@@ -127,6 +129,7 @@ export abstract class SyncedCollection<T extends object> {
 
     const entries: Entry<T>[] = [];
     const blobsById = new Map<string, string>();
+    const skippedIds: string[] = [];
     let skipped = 0;
     for (const item of storedItems) {
       try {
@@ -135,6 +138,7 @@ export abstract class SyncedCollection<T extends object> {
         blobsById.set(item.id, item.blob);
       } catch {
         skipped += 1;
+        skippedIds.push(item.id);
       }
     }
     entries.sort((a, b) => this.compare(a, b));
@@ -153,6 +157,7 @@ export abstract class SyncedCollection<T extends object> {
     });
     this._items.set(live);
     this._skipped.set(skipped);
+    this.skippedIds = skippedIds;
     this.loadedUid = uid;
     for (const entry of expired) {
       this.syncApi.deleteItem(this.collection, entry.id).then(
@@ -161,6 +166,20 @@ export abstract class SyncedCollection<T extends object> {
       );
     }
     this.connectSocket();
+  }
+
+  /**
+   * Deletes the items that could not be decrypted — left behind when a vault
+   * is replaced while another device is still writing with the old key. They
+   * are unreadable to every device, so nothing is lost.
+   */
+  removeSkipped(): void {
+    const ids = this.skippedIds;
+    this.skippedIds = [];
+    this._skipped.set(0);
+    for (const id of ids) {
+      this.remove(id);
+    }
   }
 
   /** Whether this collection has been loaded for the current user. */
@@ -324,8 +343,10 @@ export abstract class SyncedCollection<T extends object> {
         this.clearLocally(uid);
         break;
       case 'vault-updated':
-        // The vault record changed elsewhere (e.g. passphrase change); nothing
-        // to do while this session stays unlocked.
+        // A passphrase change is harmless, but a replaced vault leaves this
+        // session holding a key nobody else can read; the vault locks itself
+        // in that case.
+        await this.vault.onRemoteVaultChanged();
         break;
     }
   }

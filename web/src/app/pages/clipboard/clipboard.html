@@ -95,7 +95,12 @@
   </div>
 } @else {
   @if (store.skipped() > 0) {
-    <p class="muted">{{ i18n.t('clipboard.skipped', { n: store.skipped() }) }}</p>
+    <p class="muted skipped-note">
+      {{ i18n.t('clipboard.skipped', { n: store.skipped() }) }}
+      <button type="button" class="ghost" (click)="store.removeSkipped()">
+        {{ i18n.t('clipboard.removeSkipped') }}
+      </button>
+    </p>
   }
   <input
     class="search"

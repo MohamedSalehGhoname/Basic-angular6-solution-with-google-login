@@ -309,6 +309,57 @@ describe('sync API', () => {
   });
 });
 
+describe('vault key check', () => {
+  let app: App;
+
+  beforeEach(() => {
+    app = buildApp({ dbPath: ':memory:', verifyToken });
+  });
+
+  afterEach(async () => {
+    await app.fastify.close();
+  });
+
+  it('stores and returns it, and survives a vault without one', async () => {
+    const put = (body: object) =>
+      app.fastify.inject({ method: 'PUT', url: '/api/vault', headers: auth('alice'), payload: body });
+    const base = { salt: 'c2FsdA', opsLimit: 2, memLimit: 1024, wrappedKey: blob('wrapped') };
+
+    expect((await put({ ...base, keyCheck: blob('check') })).statusCode).toBe(204);
+    const withCheck = await app.fastify.inject({
+      method: 'GET',
+      url: '/api/vault',
+      headers: auth('alice'),
+    });
+    expect(withCheck.json().keyCheck).toBe(blob('check'));
+
+    // A client that does not send one leaves the record without it.
+    expect((await put(base)).statusCode).toBe(204);
+    const without = await app.fastify.inject({
+      method: 'GET',
+      url: '/api/vault',
+      headers: auth('alice'),
+    });
+    expect(without.json().keyCheck).toBeUndefined();
+  });
+
+  it('rejects a key check that is not ciphertext', async () => {
+    const res = await app.fastify.inject({
+      method: 'PUT',
+      url: '/api/vault',
+      headers: auth('alice'),
+      payload: {
+        salt: 'c2FsdA',
+        opsLimit: 2,
+        memLimit: 1024,
+        wrappedKey: blob('wrapped'),
+        keyCheck: 'plaintext',
+      },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
 describe('mixed sign-in during the changeover', () => {
   const real = async (token: string) => {
     if (token !== 'google-token') {

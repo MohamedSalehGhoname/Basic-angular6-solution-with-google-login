@@ -13,6 +13,8 @@ export interface WrappedKeyRecord {
 export interface RemoteVault extends WrappedKeyRecord {
   /** Optional recovery-code-wrapped copy of the vault key. */
   recovery?: WrappedKeyRecord;
+  /** Ciphertext only the current vault key opens; see VaultService. */
+  keyCheck?: string;
 }
 
 export interface RemoteItem {
