@@ -11,7 +11,8 @@ const builtWeb = join(webDir, 'dist', 'web', 'browser');
 const target = join(mobileDir, 'www');
 
 console.log('Building web client…');
-execSync('npm run build', { cwd: webDir, stdio: 'inherit' });
+// The "mobile" configuration keeps the dev sign-in the phone still needs.
+execSync('npm run build -- --configuration mobile', { cwd: webDir, stdio: 'inherit' });
 
 console.log(`Copying ${builtWeb} → ${target}`);
 rmSync(target, { recursive: true, force: true });

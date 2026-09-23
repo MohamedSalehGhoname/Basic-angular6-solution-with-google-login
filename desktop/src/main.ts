@@ -43,6 +43,20 @@ interface PickerItem {
 /** The deployed web app, used when neither a dev URL nor a bundled build is set. */
 const HOSTED_WEB_URL = 'https://ghoclipboard.ghonameservices.com';
 
+/** Google's sign-in flow (its own pages and the Firebase auth handler). */
+function isSignInUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname;
+    return (
+      host === 'accounts.google.com' ||
+      host.endsWith('.firebaseapp.com') ||
+      host.endsWith('.google.com')
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** Multi-size .ico on Windows (crisp in the tray and taskbar), PNG elsewhere. */
 function appIcon(): string {
   return join(__dirname, '..', 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png');
@@ -218,6 +232,27 @@ function createWindow(): void {
     if (details.isMainFrame && !details.isSameDocument) {
       rendererTakesFiles = false;
     }
+  });
+
+  // Electron denies window.open by default, which would block Google's
+  // sign-in popup. Allow it for the sign-in flow only; every other link
+  // opens in the user's own browser instead of an app window.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (isSignInUrl(url)) {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          width: 520,
+          height: 680,
+          autoHideMenuBar: true,
+          webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
+        },
+      };
+    }
+    if (url.startsWith('https://') || url.startsWith('http://')) {
+      void shell.openExternal(url);
+    }
+    return { action: 'deny' };
   });
 
   const entry = resolveWebEntry();

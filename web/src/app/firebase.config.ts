@@ -1,11 +1,12 @@
-// Placeholder values — no real keys are committed. Create a Firebase project,
-// enable the Google sign-in provider, and paste your web app config here.
-// See the repository README for step-by-step setup.
+// Firebase web app config for the GhoClipboard project. These are public
+// client identifiers (they ship inside the page of every Firebase site), not
+// secrets: what protects an account is the Google sign-in itself, and what
+// protects the data is the vault passphrase, which never leaves the device.
 export const firebaseConfig = {
-  apiKey: 'YOUR_API_KEY',
-  authDomain: 'YOUR_PROJECT.firebaseapp.com',
-  projectId: 'YOUR_PROJECT_ID',
-  storageBucket: 'YOUR_PROJECT.appspot.com',
-  messagingSenderId: 'YOUR_SENDER_ID',
-  appId: 'YOUR_APP_ID',
+  apiKey: 'AIzaSyDMOjRPAnBqyDxMXM6rA0aK5SfJ_bTvI94',
+  authDomain: 'ghoclipboard.firebaseapp.com',
+  projectId: 'ghoclipboard',
+  storageBucket: 'ghoclipboard.firebasestorage.app',
+  messagingSenderId: '178287372678',
+  appId: '1:178287372678:web:6eacd291d747509e87e407',
 };

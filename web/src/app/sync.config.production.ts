@@ -2,9 +2,9 @@
 export const syncConfig = {
   apiBaseUrl: 'https://ghoclipboard.ghonameservices.com',
 
-  // TEMPORARY until Firebase sign-in is set up: the dev identity, with the
-  // server closed by a shared access key (ACCESS_KEY) that every device
-  // enters once. Turn both off together when real sign-in lands.
-  devAuth: true,
+  // Real Google sign-in. The shared access key stays until the phone app can
+  // sign in natively too, because the server still accepts the old dev
+  // identity for it (see DEV_UID_ALIAS) and the key is what shields that.
+  devAuth: false,
   accessKeyRequired: true,
 };
