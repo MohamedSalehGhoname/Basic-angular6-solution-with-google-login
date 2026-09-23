@@ -47,6 +47,10 @@ const run = (command, args, options = {}) =>
 console.log('==> Bundling the web app');
 run('npm', ['run', 'bundle:web'], { cwd: mobileDir, shell: true });
 
+// bundle:web only fills mobile/www; the native project gets its copy here.
+console.log('==> Syncing the native project');
+run('npx', ['cap', 'sync', 'android'], { cwd: mobileDir, shell: true });
+
 console.log('==> Building the release APK');
 run(join(androidDir, 'gradlew.bat'), ['assembleRelease'], { cwd: androidDir });
 
