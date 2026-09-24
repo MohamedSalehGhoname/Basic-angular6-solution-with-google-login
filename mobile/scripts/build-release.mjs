@@ -12,7 +12,7 @@
 // The release APK is signed with a different key than the debug ones, so a
 // phone with a debug build installed must uninstall it first.
 import { execFileSync } from 'node:child_process';
-import { copyFileSync, existsSync, readFileSync, readdirSync } from 'node:fs';
+import { copyFileSync, existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -44,6 +44,15 @@ const run = (command, args, options = {}) =>
     env: { ...process.env, JAVA_HOME, ANDROID_HOME },
     ...options,
   });
+
+// Play's automatic protection needs minSdk 24; the native project is
+// regenerated from Capacitor's template (which says 23), so enforce it here.
+const variables = join(androidDir, 'variables.gradle');
+const gradleVars = readFileSync(variables, 'utf8');
+if (/minSdkVersion\s*=\s*2[0-3]/.test(gradleVars)) {
+  writeFileSync(variables, gradleVars.replace(/minSdkVersion\s*=\s*2[0-3]/, 'minSdkVersion = 24'));
+  console.log('==> Raised minSdkVersion to 24 (Play automatic protection)');
+}
 
 console.log('==> Bundling the web app');
 run('npm', ['run', 'bundle:web'], { cwd: mobileDir, shell: true });
