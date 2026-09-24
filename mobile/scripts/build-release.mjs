@@ -64,6 +64,17 @@ if (raised) {
   console.log('==> Raised SDK levels to the minimums Play requires (24 / 36 / 36)');
 }
 
+// Play refuses a version code it has seen before, and the native project is
+// regenerated, so the number lives here and is stamped in before every build.
+// Raise versionCode in mobile/version.json for each upload.
+const version = JSON.parse(readFileSync(join(mobileDir, 'version.json'), 'utf8'));
+const appGradlePath = join(androidDir, 'app/build.gradle');
+const appGradle = readFileSync(appGradlePath, 'utf8')
+  .replace(/versionCode\s+\d+/, `versionCode ${version.versionCode}`)
+  .replace(/versionName\s+"[^"]*"/, `versionName "${version.versionName}"`);
+writeFileSync(appGradlePath, appGradle);
+console.log(`==> Version ${version.versionName} (code ${version.versionCode})`);
+
 console.log('==> Bundling the web app');
 run('npm', ['run', 'bundle:web'], { cwd: mobileDir, shell: true });
 
