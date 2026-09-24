@@ -45,13 +45,23 @@ const run = (command, args, options = {}) =>
     ...options,
   });
 
-// Play's automatic protection needs minSdk 24; the native project is
-// regenerated from Capacitor's template (which says 23), so enforce it here.
+// Play requires minSdk 24 (automatic protection) and target/compile SDK 36
+// (Android 16) for new apps. The native project is regenerated from
+// Capacitor's template, which is behind on both, so enforce them here.
 const variables = join(androidDir, 'variables.gradle');
-const gradleVars = readFileSync(variables, 'utf8');
-if (/minSdkVersion\s*=\s*2[0-3]/.test(gradleVars)) {
-  writeFileSync(variables, gradleVars.replace(/minSdkVersion\s*=\s*2[0-3]/, 'minSdkVersion = 24'));
-  console.log('==> Raised minSdkVersion to 24 (Play automatic protection)');
+const required = { minSdkVersion: 24, compileSdkVersion: 36, targetSdkVersion: 36 };
+let gradleVars = readFileSync(variables, 'utf8');
+let raised = false;
+for (const [name, floor] of Object.entries(required)) {
+  const match = new RegExp(`${name}\\s*=\\s*(\\d+)`).exec(gradleVars);
+  if (match && Number(match[1]) < floor) {
+    gradleVars = gradleVars.replace(match[0], `${name} = ${floor}`);
+    raised = true;
+  }
+}
+if (raised) {
+  writeFileSync(variables, gradleVars);
+  console.log('==> Raised SDK levels to the minimums Play requires (24 / 36 / 36)');
 }
 
 console.log('==> Bundling the web app');
