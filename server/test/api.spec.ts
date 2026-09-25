@@ -463,3 +463,92 @@ describe('requests that declare JSON but send no body', () => {
     expect(res.statusCode).toBe(400);
   });
 });
+
+describe('deleting the account', () => {
+  let app: App;
+
+  beforeEach(() => {
+    app = buildApp({ dbPath: ':memory:', verifyToken, maxItems: 3 });
+  });
+
+  afterEach(async () => {
+    await app.fastify.close();
+  });
+
+  const seed = async (uid: string) => {
+    const vault = await app.fastify.inject({
+      method: 'PUT',
+      url: '/api/vault',
+      headers: auth(uid),
+      payload: { salt: 'c2FsdA', opsLimit: 2, memLimit: 67108864, wrappedKey: blob(uid) },
+    });
+    expect(vault.statusCode).toBe(204);
+    await app.fastify.inject({
+      method: 'PUT',
+      url: '/api/clipboard/items/one',
+      headers: auth(uid),
+      payload: { blob: blob(`${uid}-one`) },
+    });
+    await app.fastify.inject({
+      method: 'PUT',
+      url: '/api/secrets/items/two',
+      headers: auth(uid),
+      payload: { blob: blob(`${uid}-two`) },
+    });
+  };
+
+  it('erases the vault and every collection, and leaves other accounts alone', async () => {
+    await seed('alice');
+    await seed('bob');
+
+    const res = await app.fastify.inject({
+      method: 'DELETE',
+      url: '/api/account',
+      headers: auth('alice'),
+    });
+    expect(res.statusCode).toBe(204);
+
+    const vault = await app.fastify.inject({
+      method: 'GET',
+      url: '/api/vault',
+      headers: auth('alice'),
+    });
+    expect(vault.statusCode).toBe(404);
+    for (const collection of ['clipboard', 'secrets']) {
+      const items = await app.fastify.inject({
+        method: 'GET',
+        url: `/api/${collection}/items`,
+        headers: auth('alice'),
+      });
+      expect(items.json().items).toEqual([]);
+    }
+
+    // Bob is untouched.
+    const bobVault = await app.fastify.inject({
+      method: 'GET',
+      url: '/api/vault',
+      headers: auth('bob'),
+    });
+    expect(bobVault.statusCode).toBe(200);
+    const bobItems = await app.fastify.inject({
+      method: 'GET',
+      url: '/api/clipboard/items',
+      headers: auth('bob'),
+    });
+    expect(bobItems.json().items).toHaveLength(1);
+  });
+
+  it('refuses without a token', async () => {
+    const res = await app.fastify.inject({ method: 'DELETE', url: '/api/account' });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('succeeds on an account that has nothing stored', async () => {
+    const res = await app.fastify.inject({
+      method: 'DELETE',
+      url: '/api/account',
+      headers: auth('nobody'),
+    });
+    expect(res.statusCode).toBe(204);
+  });
+});

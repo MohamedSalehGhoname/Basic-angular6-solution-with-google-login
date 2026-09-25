@@ -299,6 +299,16 @@ export abstract class SyncedCollection<T extends object> {
 
   private async applyEvent(event: SyncEvent): Promise<void> {
     const uid = this.auth.user()?.uid;
+    // The account going away matters whether or not this session is unlocked,
+    // so it is handled before the guards below.
+    if (event.type === 'account-deleted') {
+      if (uid) {
+        this.clearLocally(uid);
+      }
+      this._items.set([]);
+      this.vault.onAccountDeleted();
+      return;
+    }
     if (!uid || this.vault.status() !== 'unlocked') {
       return;
     }

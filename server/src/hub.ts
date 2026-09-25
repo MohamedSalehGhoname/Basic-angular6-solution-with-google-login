@@ -8,7 +8,8 @@ export type SyncEvent =
       item: { id: string; blob: string; createdAt: number };
     }
   | { type: 'item-removed'; collection: string; id: string }
-  | { type: 'items-cleared'; collection: string };
+  | { type: 'items-cleared'; collection: string }
+  | { type: 'account-deleted' };
 
 interface Connection {
   socket: WebSocket;

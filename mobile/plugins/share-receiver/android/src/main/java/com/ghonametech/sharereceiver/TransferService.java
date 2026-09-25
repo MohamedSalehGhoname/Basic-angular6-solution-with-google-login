@@ -118,6 +118,10 @@ public class TransferService extends Service {
             .setOngoing(true)
             .setSilent(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
+            // Android 12 and later hold a foreground service's notification back
+            // for ten seconds, which is longer than most transfers take: someone
+            // who leaves the app sees nothing at all. Show it at once instead.
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setContentIntent(tap);
         if (total > 0) {
             builder.setProgress(100, (int) Math.min(100, done * 100 / total), false);

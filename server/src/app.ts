@@ -235,6 +235,16 @@ export function buildApp(options: AppOptions): App {
       return reply.code(204).send();
     });
 
+    // Deleting the account is the user's own doing, so it needs no
+    // confirmation here: the client asks twice before it ever calls this.
+    // Other signed-in devices hear about it and lock themselves.
+    api.delete('/account', async (request, reply) => {
+      const removed = db.deleteAccount(request.uid);
+      hub.broadcast(request.uid, { type: 'account-deleted' }, clientId(request));
+      fastify.log.info({ uid: request.uid, ...removed }, 'account deleted');
+      return reply.code(204).send();
+    });
+
     api.get(
       '/:collection/items',
       { schema: { params: collectionParamsSchema } },

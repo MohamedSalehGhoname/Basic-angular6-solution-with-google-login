@@ -141,3 +141,46 @@
     <p class="error" role="alert">{{ message }}</p>
   }
 </section>
+
+<section class="card danger-zone">
+  <h2>{{ i18n.t('settings.deleteAccount') }}</h2>
+  <p class="muted">{{ i18n.t('settings.deleteIntro') }}</p>
+  <p class="muted">{{ i18n.t('settings.deleteFilesNote') }}</p>
+
+  @if (deleteOpen()) {
+    <label class="field">
+      <span>{{ i18n.t('settings.deleteTypeLabel') }}</span>
+      <input
+        type="text"
+        name="deleteWord"
+        autocomplete="off"
+        autocapitalize="none"
+        spellcheck="false"
+        [(ngModel)]="deleteWord"
+        [disabled]="deleteBusy()"
+      />
+    </label>
+    <div class="actions">
+      <button
+        type="button"
+        class="danger"
+        (click)="deleteAccount()"
+        [disabled]="!deleteArmed || deleteBusy()"
+      >
+        {{ deleteBusy() ? i18n.t('settings.deleting') : i18n.t('settings.deleteConfirm') }}
+      </button>
+      <button type="button" class="ghost" (click)="cancelDelete()" [disabled]="deleteBusy()">
+        {{ i18n.t('settings.cancel') }}
+      </button>
+    </div>
+  } @else {
+    <div class="actions">
+      <button type="button" class="ghost danger" (click)="openDelete()">
+        {{ i18n.t('settings.deleteStart') }}
+      </button>
+    </div>
+  }
+  @if (deleteError(); as message) {
+    <p class="error" role="alert">{{ message }}</p>
+  }
+</section>

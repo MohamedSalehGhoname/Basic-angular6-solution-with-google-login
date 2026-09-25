@@ -200,6 +200,17 @@ export const TRANSLATIONS = {
       'This replaces your existing recovery code. The old one will stop working. Continue?',
     'settings.removeConfirm':
       'Remove the recovery code? You will only be able to unlock with your passphrase.',
+    'settings.deleteAccount': 'Delete account',
+    'settings.deleteIntro':
+      'Deletes your vault, every clipboard entry, every password and every file record from the server, on all your devices. Nobody, including us, can bring it back.',
+    'settings.deleteFilesNote':
+      'Files you sent are held in append-only storage and are erased when their retention period ends; after this their keys are gone, so nobody can read them in the meantime.',
+    'settings.deleteStart': 'Delete my account',
+    'settings.deleteTypeLabel': 'Type delete to confirm',
+    'settings.deleteConfirm': 'Delete permanently',
+    'settings.deleting': 'Deleting…',
+    'settings.deleteFailed': 'Could not delete the account. Nothing was removed.',
+    'settings.cancel': 'Cancel',
   },
   ar: {
     'app.name': 'مزامنة الحافظة',
@@ -396,6 +407,17 @@ export const TRANSLATIONS = {
     'settings.removeRecovery': 'إزالة',
     'settings.replaceConfirm': 'هذا يستبدل كود الاسترجاع الحالي. القديم سيتوقف عن العمل. متابعة؟',
     'settings.removeConfirm': 'إزالة كود الاسترجاع؟ ستتمكن من الفتح بكلمة السر فقط.',
+    'settings.deleteAccount': 'حذف الحساب',
+    'settings.deleteIntro':
+      'يحذف خزنتك وكل عناصر الحافظة وكل كلمات السر وكل سجلات الملفات من الخادم، على كل أجهزتك. لا أحد، ولا نحن، يستطيع استرجاعها.',
+    'settings.deleteFilesNote':
+      'الملفات التي أرسلتها مخزَّنة في مساحة لا تقبل الحذف المباشر، وتُمحى بانتهاء مدة الاحتفاظ؛ ومفاتيحها تختفي الآن، فلا أحد يستطيع قراءتها في هذه المدة.',
+    'settings.deleteStart': 'احذف حسابي',
+    'settings.deleteTypeLabel': 'اكتب delete للتأكيد',
+    'settings.deleteConfirm': 'احذف نهائيًا',
+    'settings.deleting': 'جارٍ الحذف…',
+    'settings.deleteFailed': 'تعذّر حذف الحساب. لم يُحذف أي شيء.',
+    'settings.cancel': 'إلغاء',
   },
 } as const;
 

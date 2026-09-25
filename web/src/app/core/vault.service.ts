@@ -1,6 +1,7 @@
 import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import { AuthService } from './auth.service';
 import { CryptoService, type KdfParams } from './crypto.service';
+import { forgetLocalData } from './local-data';
 import { SyncApi, type WrappedKeyRecord } from './sync-api';
 
 export type VaultStatus = 'uninitialized' | 'locked' | 'unlocked';
@@ -126,6 +127,21 @@ export class VaultService {
    * replaced, this session's key can no longer read it, so lock rather than
    * keep writing items nobody can decrypt.
    */
+  /**
+   * Called when the account was deleted on another device. The server has no
+   * vault left, so anything kept here is unreadable to everyone including its
+   * owner: drop it and lock. Safe to call more than once — each collection's
+   * socket delivers the same event.
+   */
+  onAccountDeleted(): void {
+    const uid = this.auth.user()?.uid;
+    if (uid) {
+      forgetLocalData(uid);
+      this.metadataSynced.delete(uid);
+    }
+    this.lock();
+  }
+
   async onRemoteVaultChanged(): Promise<void> {
     if (this.status() !== 'unlocked') {
       return;

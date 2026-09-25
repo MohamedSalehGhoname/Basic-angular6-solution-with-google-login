@@ -67,6 +67,12 @@ export class FakeSyncApi {
     this.store(collection).clear();
   }
 
+  async deleteAccount(): Promise<void> {
+    this.fail();
+    this.vault = null;
+    this.collections.clear();
+  }
+
   connect(
     onEvent: (event: SyncEvent) => void,
     onStatus?: (online: boolean) => void,

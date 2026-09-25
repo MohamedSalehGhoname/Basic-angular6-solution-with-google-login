@@ -42,7 +42,8 @@ export type SyncEvent =
   | { type: 'vault-updated' }
   | { type: 'item-added'; collection: Collection; item: RemoteItem }
   | { type: 'item-removed'; collection: Collection; id: string }
-  | { type: 'items-cleared'; collection: Collection };
+  | { type: 'items-cleared'; collection: Collection }
+  | { type: 'account-deleted' };
 
 /**
  * Identifies this tab to the server so its own writes are not echoed back
@@ -92,6 +93,11 @@ export class SyncApi {
 
   async clearItems(collection: Collection): Promise<void> {
     this.assertOk(await this.request('DELETE', `/api/${collection}/items`));
+  }
+
+  /** Erases the account on the server: vault, every item, every file record. */
+  async deleteAccount(): Promise<void> {
+    this.assertOk(await this.request('DELETE', '/api/account'));
   }
 
   /**

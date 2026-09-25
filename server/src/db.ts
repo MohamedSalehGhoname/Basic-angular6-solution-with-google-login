@@ -196,6 +196,22 @@ export class SyncDb {
     this.db.prepare('DELETE FROM items WHERE uid = ? AND collection = ?').run(uid, collection);
   }
 
+  /**
+   * Erases everything the server holds for one account: the vault (and with it
+   * the only copy of the wrapped key), every item in every collection, and the
+   * record of the files it sent. The file bytes themselves live in append-only
+   * storage and go when their retention period ends — the account's records of
+   * them are gone either way, so nothing here can reach them again.
+   */
+  deleteAccount(uid: string): { items: number; files: number; hadVault: boolean } {
+    return this.db.transaction(() => {
+      const items = this.db.prepare('DELETE FROM items WHERE uid = ?').run(uid).changes;
+      const files = this.db.prepare('DELETE FROM files WHERE uid = ?').run(uid).changes;
+      const hadVault = this.db.prepare('DELETE FROM vaults WHERE uid = ?').run(uid).changes > 0;
+      return { items, files, hadVault };
+    })();
+  }
+
   close(): void {
     this.db.close();
   }

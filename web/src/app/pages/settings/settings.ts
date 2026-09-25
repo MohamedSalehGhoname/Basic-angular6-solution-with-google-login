@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { I18nService } from '../../core/i18n/i18n.service';
 import type { Locale } from '../../core/i18n/translations';
 import type { TranslationKey } from '../../core/i18n/translations';
+import { AccountService } from '../../core/account.service';
 import { BiometricUnlockService } from '../../core/biometric-unlock.service';
 import { DesktopCaptureService } from '../../core/desktop-capture.service';
 import { FileShareService } from '../../core/file-share.service';
@@ -122,5 +123,44 @@ export class Settings {
 
   protected dismissCode(): void {
     this.newRecoveryCode.set(null);
+  }
+
+  // Account deletion. Two deliberate steps: open the panel, then type the word
+  // — a misplaced tap cannot get past either.
+  private readonly account = inject(AccountService);
+  protected readonly deleteOpen = signal(false);
+  protected readonly deleteBusy = signal(false);
+  protected readonly deleteError = signal<string | null>(null);
+  protected deleteWord = '';
+
+  /** The typed confirmation, matched loosely on case and stray spaces only. */
+  protected get deleteArmed(): boolean {
+    return this.deleteWord.trim().toLowerCase() === 'delete';
+  }
+
+  protected openDelete(): void {
+    this.deleteError.set(null);
+    this.deleteWord = '';
+    this.deleteOpen.set(true);
+  }
+
+  protected cancelDelete(): void {
+    this.deleteOpen.set(false);
+    this.deleteWord = '';
+  }
+
+  protected async deleteAccount(): Promise<void> {
+    if (!this.deleteArmed) {
+      return;
+    }
+    this.deleteError.set(null);
+    this.deleteBusy.set(true);
+    try {
+      await this.account.deleteAccount();
+      // Signing out sends the app back to the login page; nothing to reset.
+    } catch {
+      this.deleteError.set(this.i18n.t('settings.deleteFailed'));
+      this.deleteBusy.set(false);
+    }
   }
 }
