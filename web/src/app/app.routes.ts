@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/auth.guard';
 import { unlockGuard } from './core/vault.guard';
+import { Autofill } from './pages/autofill/autofill';
 import { Clipboard } from './pages/clipboard/clipboard';
 import { Login } from './pages/login/login';
 import { Secrets } from './pages/secrets/secrets';
@@ -21,6 +22,15 @@ export const routes: Routes = [
     component: Secrets,
     canActivate: [authGuard, unlockGuard],
     title: 'Secrets · Clipboard Sync',
+  },
+  {
+    // Opened by Android when the user picks our autofill suggestion. It needs
+    // an unlocked vault like any other page, but reaches /unlock itself so it
+    // can come back here afterwards.
+    path: 'autofill',
+    component: Autofill,
+    canActivate: [authGuard],
+    title: 'Autofill · Clipboard Sync',
   },
   {
     path: 'settings',

@@ -4,6 +4,7 @@ import { I18nService } from '../../core/i18n/i18n.service';
 import type { Locale } from '../../core/i18n/translations';
 import type { TranslationKey } from '../../core/i18n/translations';
 import { AccountService } from '../../core/account.service';
+import { AutofillService } from '../../core/autofill.service';
 import { BiometricUnlockService } from '../../core/biometric-unlock.service';
 import { DesktopCaptureService } from '../../core/desktop-capture.service';
 import { FileShareService } from '../../core/file-share.service';
@@ -25,9 +26,11 @@ export class Settings {
   protected readonly biometric = inject(BiometricUnlockService);
   protected readonly biometricBusy = signal(false);
   protected readonly biometricError = signal<string | null>(null);
+  protected readonly autofill = inject(AutofillService);
 
   constructor() {
     void this.biometric.refreshStatus();
+    void this.autofill.refreshStatus();
   }
 
   protected async toggleBiometric(on: boolean): Promise<void> {

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The row Android draws above the keyboard for one of our suggestions.
+     A library cannot reference the app's launcher icon, so this is text
+     only; Android puts the app's own icon beside it in the autofill bar. -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/autofill_suggestion_text"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:paddingStart="16dp"
+    android:paddingEnd="16dp"
+    android:paddingTop="14dp"
+    android:paddingBottom="14dp"
+    android:textSize="16sp"
+    android:maxLines="1"
+    android:ellipsize="end" />

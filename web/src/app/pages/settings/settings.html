@@ -39,6 +39,26 @@
   </section>
 }
 
+@if (autofill.supported()) {
+  <section class="card">
+    <h2>{{ i18n.t('settings.autofill') }}</h2>
+    <p class="muted">{{ i18n.t('settings.autofillIntro') }}</p>
+    <p class="status">
+      <strong>
+        {{ autofill.enabled() ? i18n.t('settings.autofillOn') : i18n.t('settings.autofillOff') }}
+      </strong>
+    </p>
+    @if (!biometric.enabled()) {
+      <p class="muted">{{ i18n.t('settings.autofillNeedsFingerprint') }}</p>
+    }
+    <div class="actions">
+      <button type="button" (click)="autofill.openSettings()">
+        {{ autofill.enabled() ? i18n.t('settings.autofillChange') : i18n.t('settings.autofillEnable') }}
+      </button>
+    </div>
+  </section>
+}
+
 @if (capture.available) {
   <section class="card">
     <h2>{{ i18n.t('settings.capture') }}</h2>

@@ -1,0 +1,161 @@
+:host {
+  display: block;
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+}
+
+h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1.15rem;
+}
+
+.muted {
+  color: var(--text-muted);
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+}
+
+.search {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  font: inherit;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  margin-bottom: 0.75rem;
+}
+
+.entries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.entry {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  width: 100%;
+  text-align: start;
+  padding: 0.75rem 0.5rem;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.entry:hover {
+  background: var(--surface-hover);
+}
+
+.entry-title {
+  font-weight: 600;
+}
+
+.entry-user {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.badge {
+  margin-inline-start: 0.5rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 0.7rem;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.captured {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 0.75rem;
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+}
+
+.captured dt {
+  color: var(--text-muted);
+}
+
+.captured dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.field {
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.field span {
+  display: block;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin-bottom: 0.25rem;
+}
+
+.field input {
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  font: inherit;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+button {
+  padding: 0.5rem 0.95rem;
+  font: inherit;
+  font-size: 0.9rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--primary);
+  color: var(--on-primary);
+  cursor: pointer;
+}
+
+button.ghost {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.empty {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  padding: 1rem 0;
+}
+
+.error {
+  color: var(--danger);
+  font-size: 0.875rem;
+  margin: 0.75rem 0 0;
+}

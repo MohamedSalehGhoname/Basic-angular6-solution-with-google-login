@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="autofill_service_label">GhoClipboard</string>
+    <string name="autofill_service_summary">Fills your saved passwords after a fingerprint check. Nothing is decrypted until you choose an entry.</string>
+    <string name="autofill_unlock_to_fill">GhoClipboard — unlock to fill</string>
+</resources>

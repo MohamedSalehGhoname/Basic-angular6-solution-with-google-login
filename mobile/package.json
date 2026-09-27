@@ -23,6 +23,7 @@
     "@capacitor/ios": "^7.0.0",
     "@capacitor/share": "^7.0.0",
     "@capacitor/status-bar": "^7.0.0",
+    "capacitor-autofill": "file:plugins/autofill",
     "capacitor-biometric-vault": "file:plugins/biometric-vault",
     "capacitor-google-signin": "file:plugins/google-signin",
     "capacitor-share-receiver": "file:plugins/share-receiver"

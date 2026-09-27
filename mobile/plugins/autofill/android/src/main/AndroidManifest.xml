@@ -1,0 +1,30 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!-- Android binds this only on API 26 and later; older phones simply
+             never see it, which is why no version guard is needed here. -->
+        <service
+            android:name="com.ghonametech.autofill.ClipSyncAutofillService"
+            android:exported="true"
+            android:label="@string/autofill_service_label"
+            android:permission="android.permission.BIND_AUTOFILL_SERVICE">
+            <meta-data
+                android:name="android.autofill"
+                android:resource="@xml/autofill_service" />
+            <intent-filter>
+                <action android:name="android.service.autofill.AutofillService" />
+            </intent-filter>
+        </service>
+
+        <!-- Opened by the service when the user picks a suggestion, and by the
+             save prompt. Not exported: only the system starts it, through the
+             PendingIntent the service hands out. -->
+        <!-- No theme here on purpose: a library cannot reference the app's
+             styles, and the application theme is the right one anyway. -->
+        <activity
+            android:name="com.ghonametech.autofill.AutofillActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop" />
+    </application>
+</manifest>
