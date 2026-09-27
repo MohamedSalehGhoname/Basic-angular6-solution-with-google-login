@@ -211,6 +211,12 @@ export const TRANSLATIONS = {
     'settings.deleting': 'Deleting…',
     'settings.deleteFailed': 'Could not delete the account. Nothing was removed.',
     'settings.cancel': 'Cancel',
+    'settings.about': 'About',
+    'settings.aboutProduct': 'Clipboard Sync is one of the products of GhoMicrosystems.',
+    'settings.aboutSite': 'ghomicrosystems.com',
+    'settings.aboutPrivacy': 'Privacy policy',
+    'settings.aboutDelete': 'How to delete your account',
+    'footer.product': 'One of the products of',
   },
   ar: {
     'app.name': 'مزامنة الحافظة',
@@ -418,6 +424,12 @@ export const TRANSLATIONS = {
     'settings.deleting': 'جارٍ الحذف…',
     'settings.deleteFailed': 'تعذّر حذف الحساب. لم يُحذف أي شيء.',
     'settings.cancel': 'إلغاء',
+    'settings.about': 'عن التطبيق',
+    'settings.aboutProduct': 'مزامنة الحافظة أحد منتجات GhoMicrosystems.',
+    'settings.aboutSite': 'ghomicrosystems.com',
+    'settings.aboutPrivacy': 'سياسة الخصوصية',
+    'settings.aboutDelete': 'كيف تحذف حسابك',
+    'footer.product': 'أحد منتجات',
   },
 } as const;
 

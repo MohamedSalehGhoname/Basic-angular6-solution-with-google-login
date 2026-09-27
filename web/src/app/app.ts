@@ -3,11 +3,12 @@ import { RouterOutlet } from '@angular/router';
 import { DesktopCaptureService } from './core/desktop-capture.service';
 import { FileShareService } from './core/file-share.service';
 import { I18nService } from './core/i18n/i18n.service';
+import { Footer } from './layout/footer';
 import { Header } from './layout/header';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, Header],
+  imports: [RouterOutlet, Header, Footer],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })

@@ -145,3 +145,15 @@ button.danger:not(.ghost) {
   background: var(--danger);
   color: #fff;
 }
+
+.about-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.1rem;
+  margin: 0.75rem 0 0;
+  font-size: 0.875rem;
+}
+
+.about-links a {
+  color: var(--primary);
+}

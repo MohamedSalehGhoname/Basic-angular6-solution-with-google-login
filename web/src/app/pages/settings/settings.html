@@ -184,3 +184,19 @@
     <p class="error" role="alert">{{ message }}</p>
   }
 </section>
+
+<section class="card">
+  <h2>{{ i18n.t('settings.about') }}</h2>
+  <p class="muted">{{ i18n.t('settings.aboutProduct') }}</p>
+  <p class="about-links">
+    <a href="https://ghomicrosystems.com" target="_blank" rel="noopener noreferrer">
+      {{ i18n.t('settings.aboutSite') }}
+    </a>
+    <a href="/privacy.html" target="_blank" rel="noopener noreferrer">
+      {{ i18n.t('settings.aboutPrivacy') }}
+    </a>
+    <a href="/delete-account.html" target="_blank" rel="noopener noreferrer">
+      {{ i18n.t('settings.aboutDelete') }}
+    </a>
+  </p>
+</section>
