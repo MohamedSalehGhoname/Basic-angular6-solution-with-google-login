@@ -26,6 +26,7 @@
     "capacitor-autofill": "file:plugins/autofill",
     "capacitor-biometric-vault": "file:plugins/biometric-vault",
     "capacitor-google-signin": "file:plugins/google-signin",
+    "capacitor-qr-scanner": "file:plugins/qr-scanner",
     "capacitor-share-receiver": "file:plugins/share-receiver"
   },
   "devDependencies": {

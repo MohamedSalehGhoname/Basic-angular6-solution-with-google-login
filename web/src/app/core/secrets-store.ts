@@ -19,6 +19,16 @@ export interface SecretFields {
   attachments: Attachment[];
   /** Group (folder) id; null/absent = top level. */
   groupId?: string | null;
+  /**
+   * The shared secret for this entry's two-factor codes, base32, absent when
+   * there are none. As sensitive as the password — it mints codes forever —
+   * so it lives in the encrypted payload like everything else here.
+   */
+  totp?: string | null;
+  /** Non-default code settings; absent means six digits every 30s, SHA-1. */
+  totpDigits?: number | null;
+  totpPeriod?: number | null;
+  totpAlgorithm?: 'SHA-1' | 'SHA-256' | 'SHA-512' | null;
 }
 
 interface SecretPayload extends SecretFields {
@@ -84,6 +94,12 @@ export class SecretsStore extends SyncedCollection<SecretPayload> {
       notes: fields.notes,
       attachments: Array.isArray(fields.attachments) ? fields.attachments : [],
       groupId: fields.groupId ?? null,
+      // Two-factor settings. Only the ones that differ from the usual are
+      // kept, so an ordinary entry stays as small as it was.
+      totp: fields.totp ? fields.totp : null,
+      totpDigits: fields.totp ? (fields.totpDigits ?? null) : null,
+      totpPeriod: fields.totp ? (fields.totpPeriod ?? null) : null,
+      totpAlgorithm: fields.totp ? (fields.totpAlgorithm ?? null) : null,
     };
   }
 }

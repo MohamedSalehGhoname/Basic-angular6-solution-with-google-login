@@ -66,6 +66,34 @@ describe('SecretsStore', () => {
     expect(stored.url).toBe('https://github.com');
   });
 
+  it('keeps the two-factor key and its settings through a save', async () => {
+    // normalize() rebuilds the entry field by field, so anything it forgets is
+    // dropped silently on the way to storage — which is exactly what happened
+    // when these were added.
+    await store.add(
+      fields({ totp: 'GEZDGNBVGY3TQOJQ', totpDigits: 8, totpPeriod: 60, totpAlgorithm: 'SHA-256' }),
+    );
+    const stored = store.items()[0]!;
+    expect(stored.totp).toBe('GEZDGNBVGY3TQOJQ');
+    expect(stored.totpDigits).toBe(8);
+    expect(stored.totpPeriod).toBe(60);
+    expect(stored.totpAlgorithm).toBe('SHA-256');
+
+    await store.save(stored.id, fields({ ...stored, title: 'Renamed' }));
+    const edited = store.items()[0]!;
+    expect(edited.title).toBe('Renamed');
+    expect(edited.totp).toBe('GEZDGNBVGY3TQOJQ');
+  });
+
+  it('drops the two-factor settings when the key is removed', async () => {
+    await store.add(fields({ totp: 'GEZDGNBVGY3TQOJQ', totpDigits: 8 }));
+    const stored = store.items()[0]!;
+    await store.save(stored.id, fields({ ...stored, totp: null }));
+    const cleared = store.items()[0]!;
+    expect(cleared.totp).toBeNull();
+    expect(cleared.totpDigits).toBeNull();
+  });
+
   it('requires a title', async () => {
     expect(await store.add(fields({ title: '   ' }))).toBeNull();
     expect(store.items()).toEqual([]);

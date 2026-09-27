@@ -16,12 +16,15 @@ import {
   parseKeePassXml,
 } from '../../core/keepass-import';
 import { DEFAULT_PASSWORD_OPTIONS, generatePassword } from '../../core/password-generator';
+import { QrScannerService } from '../../core/qr-scanner.service';
 import {
   type Attachment,
   SecretsStore,
   type SecretEntry,
   type SecretFields,
 } from '../../core/secrets-store';
+import { TOTP_DEFAULTS, formatCode, parseTotp } from '../../core/totp';
+import { TotpService } from '../../core/totp.service';
 
 const EMPTY_FORM: SecretFields = {
   title: '',
@@ -31,7 +34,17 @@ const EMPTY_FORM: SecretFields = {
   notes: '',
   attachments: [],
   groupId: null,
+  totp: null,
+  totpDigits: null,
+  totpPeriod: null,
+  totpAlgorithm: null,
 };
+
+/** The parts of an entry the code depends on; the form has them too. */
+type TotpFields = Pick<
+  SecretFields,
+  'totp' | 'totpDigits' | 'totpPeriod' | 'totpAlgorithm'
+>;
 
 const EXPANDED_KEY = 'clipsync.secrets.expanded';
 const SECRET_DRAG_TYPE = 'application/x-clipsync-secret';
@@ -68,6 +81,36 @@ export class Secrets {
   protected form: SecretFields = { ...EMPTY_FORM, attachments: [] };
   // Held in a signal (not on `form`) so async attach/remove updates re-render.
   protected readonly formAttachments = signal<Attachment[]>([]);
+
+  // Two-factor codes. The box takes either a bare base32 secret or the whole
+  // otpauth:// link a QR code holds, so whatever the user copied works.
+  protected totpInput = '';
+  protected readonly totpError = signal(false);
+  protected readonly totpAccepted = signal<string | null>(null);
+  private readonly totp = inject(TotpService);
+  protected readonly qr = inject(QrScannerService);
+  protected readonly scanning = signal(false);
+
+  /**
+   * Scans the QR code the site is showing. Anything a QR code holds lands in
+   * the same box the user could have typed into, so a code that is not an
+   * otpauth link reports the same clear error as a bad paste.
+   */
+  protected async scanTotp(): Promise<void> {
+    this.scanning.set(true);
+    try {
+      const value = await this.qr.scan();
+      if (value === null) {
+        return;
+      }
+      this.totpInput = value;
+      this.onTotpInput(value);
+    } catch {
+      this.totpError.set(true);
+    } finally {
+      this.scanning.set(false);
+    }
+  }
 
   protected readonly editingTitle = computed(() => {
     const id = this.editingId();
@@ -353,7 +396,14 @@ export class Secrets {
       notes: entry.notes,
       attachments: [],
       groupId: this.groupOf(entry),
+      totp: entry.totp ?? null,
+      totpDigits: entry.totpDigits ?? null,
+      totpPeriod: entry.totpPeriod ?? null,
+      totpAlgorithm: entry.totpAlgorithm ?? null,
     };
+    this.totpInput = entry.totp ?? '';
+    this.totpError.set(false);
+    this.totpAccepted.set(null);
     this.formAttachments.set([...(entry.attachments ?? [])]);
     this.editingId.set(entry.id);
     this.formOpen.set(true);
@@ -364,6 +414,47 @@ export class Secrets {
     this.editingId.set(null);
     this.form = { ...EMPTY_FORM, attachments: [] };
     this.formAttachments.set([]);
+    this.totpInput = '';
+    this.totpError.set(false);
+    this.totpAccepted.set(null);
+  }
+
+  /**
+   * Accepts either a bare base32 secret or a whole otpauth:// link, so the
+   * user can paste whatever the site gave them. An otpauth link also carries
+   * the digit count and interval, which are kept when they are not the usual
+   * ones.
+   */
+  protected onTotpInput(value: string): void {
+    const text = (value ?? '').trim();
+    if (!text) {
+      this.form.totp = null;
+      this.form.totpDigits = null;
+      this.form.totpPeriod = null;
+      this.form.totpAlgorithm = null;
+      this.totpError.set(false);
+      this.totpAccepted.set(null);
+      return;
+    }
+    const config = parseTotp(text);
+    if (!config) {
+      this.form.totp = null;
+      this.totpError.set(true);
+      this.totpAccepted.set(null);
+      return;
+    }
+    this.form.totp = config.secret;
+    this.form.totpDigits = config.digits === TOTP_DEFAULTS.digits ? null : config.digits;
+    this.form.totpPeriod = config.period === TOTP_DEFAULTS.period ? null : config.period;
+    this.form.totpAlgorithm =
+      config.algorithm === TOTP_DEFAULTS.algorithm ? null : config.algorithm;
+    this.totpError.set(false);
+    this.totpAccepted.set(
+      this.i18n.t('secrets.totpAccepted', {
+        n: String(config.digits),
+        s: String(config.period),
+      }),
+    );
   }
 
   protected async onAttachImages(input: HTMLInputElement): Promise<void> {
@@ -444,6 +535,94 @@ export class Secrets {
     this.error.set(null);
     try {
       await this.clipboard.copy(entry.username);
+    } catch {
+      this.error.set('Could not copy to the clipboard.');
+    }
+  }
+
+  // --- Two-factor codes ------------------------------------------------------
+  // Codes are computed asynchronously (WebCrypto) but the list needs them
+  // synchronously while rendering, so each entry's current code is cached and
+  // recomputed whenever the shared clock ticks past its period.
+  private readonly codes = signal<Map<string, string>>(new Map());
+  private computingFor = '';
+
+  protected codeOf(entry: SecretEntry): string {
+    const config = this.totp.config(entry);
+    if (!config) {
+      return '';
+    }
+    // Reading the tick is what subscribes this row to the clock.
+    const slot = Math.floor(this.totp.tick() / 1000 / config.period);
+    const key = `${entry.id}:${slot}`;
+    const known = this.codes().get(key);
+    if (known !== undefined) {
+      return known;
+    }
+    void this.computeCode(entry, key);
+    // Show the previous code rather than a gap while the new one is derived.
+    return this.codes().get(`${entry.id}:${slot - 1}`) ?? '······';
+  }
+
+  private async computeCode(entry: TotpFields, key: string): Promise<void> {
+    if (this.computingFor === key) {
+      return;
+    }
+    this.computingFor = key;
+    const code = await this.totp.codeFor(entry);
+    if (code === null) {
+      return;
+    }
+    this.codes.update((map) => {
+      const next = new Map(map);
+      next.set(key, formatCode(code));
+      // Keep only what is on screen; a stale slot is never read again.
+      if (next.size > 200) {
+        next.clear();
+        next.set(key, formatCode(code));
+      }
+      return next;
+    });
+  }
+
+  /** The live code for whatever is in the form right now, before saving. */
+  protected formPreviewCode(): string {
+    const config = this.totp.config(this.form);
+    if (!config) {
+      return '';
+    }
+    const slot = Math.floor(this.totp.tick() / 1000 / config.period);
+    const key = `form:${config.secret}:${slot}`;
+    const known = this.codes().get(key);
+    if (known !== undefined) {
+      return known;
+    }
+    void this.computeCode(this.form, key);
+    return this.codes().get(`form:${config.secret}:${slot - 1}`) ?? '······';
+  }
+
+  protected formPreviewLeft(): number {
+    const config = this.totp.config(this.form);
+    return config ? this.totp.remaining()(config.period) : 0;
+  }
+
+  protected secondsLeft(entry: SecretEntry): number {
+    const config = this.totp.config(entry);
+    return config ? this.totp.remaining()(config.period) : 0;
+  }
+
+  /** Copies the code itself, without the space that makes it readable. */
+  protected async copyCode(entry: SecretEntry): Promise<void> {
+    this.error.set(null);
+    try {
+      const code = await this.totp.codeFor(entry);
+      if (!code) {
+        return;
+      }
+      await this.clipboard.copyEphemeral(
+        code,
+        `${this.i18n.t('secrets.field.totp')} · ${entry.title}`,
+      );
     } catch {
       this.error.set('Could not copy to the clipboard.');
     }
