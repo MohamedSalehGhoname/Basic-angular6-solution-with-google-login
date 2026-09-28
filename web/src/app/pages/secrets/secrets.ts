@@ -17,6 +17,7 @@ import {
   parseKeePassXml,
 } from '../../core/keepass-import';
 import { DEFAULT_PASSWORD_OPTIONS, generatePassword } from '../../core/password-generator';
+import { accountTitle, parseMigration } from '../../core/authenticator-import';
 import { QrScannerService } from '../../core/qr-scanner.service';
 import {
   type Attachment,
@@ -24,7 +25,7 @@ import {
   type SecretEntry,
   type SecretFields,
 } from '../../core/secrets-store';
-import { TOTP_DEFAULTS, parseTotp } from '../../core/totp';
+import { TOTP_DEFAULTS, type TotpConfig, parseTotp } from '../../core/totp';
 import { TotpService } from '../../core/totp.service';
 
 const EMPTY_FORM: SecretFields = {
@@ -80,7 +81,8 @@ export class Secrets {
   // Two-factor codes. The box takes either a bare base32 secret or the whole
   // otpauth:// link a QR code holds, so whatever the user copied works.
   protected totpInput = '';
-  protected readonly totpError = signal(false);
+  /** Why the key was refused, or null; a message so it can name the reason. */
+  protected readonly totpError = signal<string | null>(null);
   protected readonly totpAccepted = signal<string | null>(null);
   private readonly totp = inject(TotpService);
   protected readonly qr = inject(QrScannerService);
@@ -101,7 +103,7 @@ export class Secrets {
       this.totpInput = value;
       this.onTotpInput(value);
     } catch {
-      this.totpError.set(true);
+      this.totpError.set(this.i18n.t('secrets.totpInvalid'));
     } finally {
       this.scanning.set(false);
     }
@@ -411,7 +413,7 @@ export class Secrets {
       totpAlgorithm: entry.totpAlgorithm ?? null,
     };
     this.totpInput = entry.totp ?? '';
-    this.totpError.set(false);
+    this.totpError.set(null);
     this.totpAccepted.set(null);
     this.formAttachments.set([...(entry.attachments ?? [])]);
     this.editingId.set(entry.id);
@@ -424,7 +426,7 @@ export class Secrets {
     this.form = { ...EMPTY_FORM, attachments: [] };
     this.formAttachments.set([]);
     this.totpInput = '';
-    this.totpError.set(false);
+    this.totpError.set(null);
     this.totpAccepted.set(null);
   }
 
@@ -441,14 +443,17 @@ export class Secrets {
       this.form.totpDigits = null;
       this.form.totpPeriod = null;
       this.form.totpAlgorithm = null;
-      this.totpError.set(false);
+      this.totpError.set(null);
       this.totpAccepted.set(null);
       return;
     }
-    const config = parseTotp(text);
+    // An Authenticator export is a QR code too, and it is an easy one to
+    // point this scanner at. One account can be taken here and then; a whole
+    // list belongs on the screen built for it, so say so by name rather than
+    // claiming the code is not a key.
+    const config = parseTotp(text) ?? this.fromAuthenticatorExport(text);
     if (!config) {
       this.form.totp = null;
-      this.totpError.set(true);
       this.totpAccepted.set(null);
       return;
     }
@@ -457,13 +462,37 @@ export class Secrets {
     this.form.totpPeriod = config.period === TOTP_DEFAULTS.period ? null : config.period;
     this.form.totpAlgorithm =
       config.algorithm === TOTP_DEFAULTS.algorithm ? null : config.algorithm;
-    this.totpError.set(false);
+    this.totpError.set(null);
     this.totpAccepted.set(
       this.i18n.t('secrets.totpAccepted', {
         n: String(config.digits),
         s: String(config.period),
       }),
     );
+  }
+
+  /**
+   * Reads an Authenticator export that holds a single account. Anything with
+   * more than one is left to the import screen, and the message says which
+   * screen that is.
+   */
+  private fromAuthenticatorExport(text: string): TotpConfig | null {
+    let accounts;
+    try {
+      accounts = parseMigration(text).accounts;
+    } catch {
+      this.totpError.set(this.i18n.t('secrets.totpInvalid'));
+      return null;
+    }
+    if (accounts.length !== 1) {
+      this.totpError.set(this.i18n.t('secrets.totpMigration', { n: accounts.length }));
+      return null;
+    }
+    const [account] = accounts;
+    if (!this.form.title.trim()) {
+      this.form.title = accountTitle(account);
+    }
+    return account;
   }
 
   protected async onAttachImages(input: HTMLInputElement): Promise<void> {

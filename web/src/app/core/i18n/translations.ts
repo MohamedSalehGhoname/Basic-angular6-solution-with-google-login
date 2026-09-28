@@ -182,6 +182,8 @@ export const TRANSLATIONS = {
       'Paste what the site shows when you cannot scan its QR code. The code then appears here, beside the password.',
     'secrets.totpAccepted': 'Ready — {n}-digit codes, new one every {s}s.',
     'secrets.totpInvalid': 'That is not a two-factor key. Copy the one under the QR code.',
+    'secrets.totpMigration':
+      'That is a Google Authenticator export holding {n} accounts. Import them all from the Codes tab ▸ Import from Authenticator.',
     'secrets.totpCopy': 'Copy the code',
     'secrets.totpScan': 'Scan QR',
     'secrets.totpScanning': 'Scanning…',
@@ -486,6 +488,8 @@ export const TRANSLATIONS = {
       'الصق ما يعرضه الموقع حين لا تستطيع مسح رمز QR. عندها يظهر الكود هنا بجوار كلمة السر.',
     'secrets.totpAccepted': 'تمام — كود من {n} أرقام، يتغيّر كل {s} ثانية.',
     'secrets.totpInvalid': 'هذا ليس مفتاح تحقق. انسخ المفتاح المكتوب تحت رمز QR.',
+    'secrets.totpMigration':
+      'هذا رمز تصدير من Google Authenticator فيه {n} حساب. استوردها كلها من تبويب الأكواد ▸ استيراد من Authenticator.',
     'secrets.totpCopy': 'انسخ الكود',
     'secrets.totpScan': 'امسح QR',
     'secrets.totpScanning': 'جارٍ المسح…',
