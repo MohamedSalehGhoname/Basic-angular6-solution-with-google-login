@@ -11,6 +11,15 @@
     </select>
   </label>
   <label class="field">
+    {{ i18n.t('settings.autoLock') }}
+    <select [ngModel]="autoLockValue()" (ngModelChange)="setAutoLock($event)">
+      @for (minutes of autoLockChoices; track minutes) {
+        <option [value]="minutes">{{ autoLockLabel(minutes) }}</option>
+      }
+    </select>
+    <span class="hint">{{ i18n.t('settings.autoLockHint') }}</span>
+  </label>
+  <label class="field">
     {{ i18n.t('settings.language') }}
     <select [ngModel]="i18n.locale()" (ngModelChange)="i18n.setLocale($event)">
       @for (option of localeOptions; track option.value) {
@@ -53,7 +62,9 @@
     }
     <div class="actions">
       <button type="button" (click)="autofill.openSettings()">
-        {{ autofill.enabled() ? i18n.t('settings.autofillChange') : i18n.t('settings.autofillEnable') }}
+        {{
+          autofill.enabled() ? i18n.t('settings.autofillChange') : i18n.t('settings.autofillEnable')
+        }}
       </button>
     </div>
   </section>
@@ -96,15 +107,30 @@
   <form (ngSubmit)="changePassphrase()">
     <label class="field">
       {{ i18n.t('settings.current') }}
-      <input [type]="showPassphrase() ? 'text' : 'password'" name="current" [(ngModel)]="current" autocomplete="current-password" />
+      <input
+        [type]="showPassphrase() ? 'text' : 'password'"
+        name="current"
+        [(ngModel)]="current"
+        autocomplete="current-password"
+      />
     </label>
     <label class="field">
       {{ i18n.t('settings.new') }}
-      <input [type]="showPassphrase() ? 'text' : 'password'" name="next" [(ngModel)]="next" autocomplete="new-password" />
+      <input
+        [type]="showPassphrase() ? 'text' : 'password'"
+        name="next"
+        [(ngModel)]="next"
+        autocomplete="new-password"
+      />
     </label>
     <label class="field">
       {{ i18n.t('settings.confirmNew') }}
-      <input [type]="showPassphrase() ? 'text' : 'password'" name="confirm" [(ngModel)]="confirm" autocomplete="new-password" />
+      <input
+        [type]="showPassphrase() ? 'text' : 'password'"
+        name="confirm"
+        [(ngModel)]="confirm"
+        autocomplete="new-password"
+      />
     </label>
     <label class="check">
       <input
@@ -137,18 +163,30 @@
     <div class="recovery-reveal">
       <p class="warn">{{ i18n.t('settings.recoveryWarn') }}</p>
       <code class="code">{{ code }}</code>
-      <button type="button" class="ghost" (click)="dismissCode()">{{ i18n.t('settings.recoverySaved') }}</button>
+      <button type="button" class="ghost" (click)="dismissCode()">
+        {{ i18n.t('settings.recoverySaved') }}
+      </button>
     </div>
   } @else {
     <p class="status">
       {{ i18n.t('settings.recoveryStatus') }}:
       <strong>
-        {{ vault.hasRecovery() ? i18n.t('settings.recoveryStatusSet') : i18n.t('settings.recoveryStatusNone') }}
+        {{
+          vault.hasRecovery()
+            ? i18n.t('settings.recoveryStatusSet')
+            : i18n.t('settings.recoveryStatusNone')
+        }}
       </strong>
     </p>
     <div class="actions">
       <button type="button" (click)="generateRecoveryCode()" [disabled]="recoveryBusy()">
-        {{ recoveryBusy() ? i18n.t('settings.generating') : vault.hasRecovery() ? i18n.t('settings.replaceRecovery') : i18n.t('settings.createRecovery') }}
+        {{
+          recoveryBusy()
+            ? i18n.t('settings.generating')
+            : vault.hasRecovery()
+              ? i18n.t('settings.replaceRecovery')
+              : i18n.t('settings.createRecovery')
+        }}
       </button>
       @if (vault.hasRecovery()) {
         <button type="button" class="ghost danger" (click)="removeRecoveryCode()">

@@ -1,10 +1,12 @@
-import { Component, inject } from '@angular/core';
+import { Component, effect, inject } from '@angular/core';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { filter, firstValueFrom, take } from 'rxjs';
+import { AutoLockService } from './core/auto-lock.service';
 import { AutofillService } from './core/autofill.service';
 import { DesktopCaptureService } from './core/desktop-capture.service';
 import { FileShareService } from './core/file-share.service';
 import { I18nService } from './core/i18n/i18n.service';
+import { VaultService } from './core/vault.service';
 import { Footer } from './layout/footer';
 import { Header } from './layout/header';
 
@@ -22,9 +24,23 @@ export class App {
   // Instantiated at startup so it applies the saved language/direction.
   private readonly i18n = inject(I18nService);
   private readonly autofill = inject(AutofillService);
+  // Constructed at startup so the vault locks itself when left alone, wherever
+  // in the app the user happens to be.
+  private readonly autoLock = inject(AutoLockService);
+  private readonly vault = inject(VaultService);
   private readonly router = inject(Router);
 
   constructor() {
+    // A vault that locks under the user's feet should say so rather than leave
+    // an empty list on screen.
+    effect(() => {
+      if (this.vault.status() === 'locked' && this.router.navigated) {
+        const url = this.router.url.split('?')[0];
+        if (url !== '/unlock' && url !== '/login') {
+          void this.router.navigateByUrl('/unlock');
+        }
+      }
+    });
     // Android starts the app at the root even when it opened it to answer an
     // autofill request, so the request itself is what decides the first page.
     void this.autofill.ready.then(async (request) => {

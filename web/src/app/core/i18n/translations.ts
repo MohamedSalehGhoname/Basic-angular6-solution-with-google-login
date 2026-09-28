@@ -240,6 +240,13 @@ export const TRANSLATIONS = {
     'settings.theme.light': 'light',
     'settings.theme.dark': 'dark',
     'settings.language': 'Language',
+    'settings.autoLock': 'Lock the vault when left alone',
+    'settings.autoLockNever': 'Never',
+    'settings.autoLockOne': 'After 1 minute',
+    'settings.autoLockFew': 'After {n} minutes',
+    'settings.autoLockMany': 'After {n} minutes',
+    'settings.autoLockHint':
+      'Time in the background counts too. Locking clears the key from memory; your passphrase (or fingerprint) opens it again.',
     'settings.changePass': 'Change passphrase',
     'settings.changePassIntro':
       'Your passphrase encrypts everything. Changing it re-wraps your vault key — your items are not re-encrypted and stay intact.',
@@ -546,6 +553,13 @@ export const TRANSLATIONS = {
     'settings.theme.light': 'فاتح',
     'settings.theme.dark': 'داكن',
     'settings.language': 'اللغة',
+    'settings.autoLock': 'اقفل الخزنة عند عدم الاستخدام',
+    'settings.autoLockNever': 'أبدًا',
+    'settings.autoLockOne': 'بعد دقيقة واحدة',
+    'settings.autoLockFew': 'بعد {n} دقائق',
+    'settings.autoLockMany': 'بعد {n} دقيقة',
+    'settings.autoLockHint':
+      'الوقت في الخلفية محسوب أيضًا. القفل يمسح المفتاح من الذاكرة، وكلمة السر (أو البصمة) تفتحها من جديد.',
     'settings.changePass': 'تغيير كلمة السر',
     'settings.changePassIntro':
       'كلمة سرك تشفّر كل شيء. تغييرها يعيد لفّ مفتاح الخزنة — عناصرك لا يُعاد تشفيرها وتبقى سليمة.',

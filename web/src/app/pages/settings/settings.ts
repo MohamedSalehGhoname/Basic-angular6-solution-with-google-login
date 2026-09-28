@@ -4,6 +4,11 @@ import { I18nService } from '../../core/i18n/i18n.service';
 import type { Locale } from '../../core/i18n/translations';
 import type { TranslationKey } from '../../core/i18n/translations';
 import { AccountService } from '../../core/account.service';
+import {
+  AUTO_LOCK_CHOICES,
+  AutoLockService,
+  type AutoLockMinutes,
+} from '../../core/auto-lock.service';
 import { AutofillService } from '../../core/autofill.service';
 import { BiometricUnlockService } from '../../core/biometric-unlock.service';
 import { DesktopCaptureService } from '../../core/desktop-capture.service';
@@ -27,6 +32,33 @@ export class Settings {
   protected readonly biometricBusy = signal(false);
   protected readonly biometricError = signal<string | null>(null);
   protected readonly autofill = inject(AutofillService);
+  protected readonly autoLock = inject(AutoLockService);
+  protected readonly autoLockChoices = AUTO_LOCK_CHOICES;
+
+  protected setAutoLock(minutes: string): void {
+    this.autoLock.set(Number(minutes) as AutoLockMinutes);
+  }
+
+  /**
+   * The picker's <option> values are strings, so the model has to be one too
+   * or nothing matches and the box shows the first choice whatever is set.
+   */
+  protected autoLockValue(): string {
+    return String(this.autoLock.minutes());
+  }
+
+  /** "Never", or how long — Arabic counts 3–10 differently from 11 up. */
+  protected autoLockLabel(minutes: number): string {
+    if (minutes === 0) {
+      return this.i18n.t('settings.autoLockNever');
+    }
+    if (minutes === 1) {
+      return this.i18n.t('settings.autoLockOne');
+    }
+    return this.i18n.t(minutes <= 10 ? 'settings.autoLockFew' : 'settings.autoLockMany', {
+      n: minutes,
+    });
+  }
 
   constructor() {
     void this.biometric.refreshStatus();
@@ -105,7 +137,9 @@ export class Settings {
     try {
       this.newRecoveryCode.set(await this.vault.addRecoveryCode());
     } catch (err) {
-      this.recoveryError.set(err instanceof Error ? err.message : 'Could not create a recovery code.');
+      this.recoveryError.set(
+        err instanceof Error ? err.message : 'Could not create a recovery code.',
+      );
     } finally {
       this.recoveryBusy.set(false);
     }
@@ -120,7 +154,9 @@ export class Settings {
       await this.vault.removeRecoveryCode();
       this.newRecoveryCode.set(null);
     } catch (err) {
-      this.recoveryError.set(err instanceof Error ? err.message : 'Could not remove the recovery code.');
+      this.recoveryError.set(
+        err instanceof Error ? err.message : 'Could not remove the recovery code.',
+      );
     }
   }
 
