@@ -3,6 +3,7 @@ import { authGuard } from './core/auth.guard';
 import { unlockGuard } from './core/vault.guard';
 import { Autofill } from './pages/autofill/autofill';
 import { Clipboard } from './pages/clipboard/clipboard';
+import { Codes } from './pages/codes/codes';
 import { Login } from './pages/login/login';
 import { Secrets } from './pages/secrets/secrets';
 import { Settings } from './pages/settings/settings';
@@ -16,6 +17,12 @@ export const routes: Routes = [
     component: Clipboard,
     canActivate: [authGuard, unlockGuard],
     title: 'Clipboard Sync',
+  },
+  {
+    path: 'codes',
+    component: Codes,
+    canActivate: [authGuard, unlockGuard],
+    title: 'Two-factor codes · Clipboard Sync',
   },
   {
     path: 'secrets',

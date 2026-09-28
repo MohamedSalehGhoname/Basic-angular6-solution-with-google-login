@@ -1,0 +1,217 @@
+.page-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.page-head h1 {
+  font-size: 1.3rem;
+  margin: 0;
+}
+
+.link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--primary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.muted {
+  color: var(--text-subtle);
+}
+
+.hint {
+  font-size: 0.8rem;
+  color: var(--text-subtle);
+}
+
+.tap-hint {
+  margin: 0 0 0.75rem;
+}
+
+.error {
+  padding: 0.6rem 0.8rem;
+  border-radius: var(--radius-sm);
+  background: var(--danger-surface, rgba(220, 38, 38, 0.08));
+  color: var(--danger);
+}
+
+.clearing {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-subtle);
+}
+
+.search {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 0.75rem;
+  padding: 0.55rem 0.7rem;
+  font: inherit;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+}
+
+/* --- The list ------------------------------------------------------------- */
+
+.codes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* The whole row is the copy button: on a phone the code is the target, so it
+   should be as big as the row itself. */
+.code-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.code-row:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+}
+
+.code-row.copied {
+  border-color: var(--success);
+}
+
+.identity {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.username,
+.group-path {
+  font-size: 0.8rem;
+  color: var(--text-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.code {
+  /* A code is a number, and its groups must stay in the order they are read
+     out — without this, right-to-left text flips "114 014" to "014 114". */
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 1.5rem;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.code.soon {
+  color: var(--danger);
+}
+
+.state {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 3.5rem;
+}
+
+/* A donut that empties as the code ages; the seconds sit in the hole. */
+.ring {
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+.ring-count {
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  background: var(--surface);
+  display: grid;
+  place-items: center;
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-subtle);
+}
+
+.code-row:hover .ring-count {
+  background: var(--surface-hover);
+}
+
+.copied-tag {
+  font-size: 0.8rem;
+  color: var(--success);
+  white-space: nowrap;
+}
+
+.empty-state {
+  padding: 2rem 1rem;
+  text-align: center;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.empty-state p {
+  margin: 0 0 0.4rem;
+}
+
+.cta {
+  display: inline-block;
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.95rem;
+  border-radius: var(--radius-sm);
+  background: var(--primary);
+  color: var(--on-primary);
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
+/* On a narrow screen the code leads and the name sits under it. */
+@media (max-width: 30rem) {
+  .code-row {
+    gap: 0.6rem;
+    padding: 0.6rem 0.7rem;
+  }
+
+  .code {
+    font-size: 1.25rem;
+  }
+}

@@ -23,7 +23,7 @@ import {
   type SecretEntry,
   type SecretFields,
 } from '../../core/secrets-store';
-import { TOTP_DEFAULTS, formatCode, parseTotp } from '../../core/totp';
+import { TOTP_DEFAULTS, parseTotp } from '../../core/totp';
 import { TotpService } from '../../core/totp.service';
 
 const EMPTY_FORM: SecretFields = {
@@ -39,12 +39,6 @@ const EMPTY_FORM: SecretFields = {
   totpPeriod: null,
   totpAlgorithm: null,
 };
-
-/** The parts of an entry the code depends on; the form has them too. */
-type TotpFields = Pick<
-  SecretFields,
-  'totp' | 'totpDigits' | 'totpPeriod' | 'totpAlgorithm'
->;
 
 const EXPANDED_KEY = 'clipsync.secrets.expanded';
 const SECRET_DRAG_TYPE = 'application/x-clipsync-secret';
@@ -541,74 +535,22 @@ export class Secrets {
   }
 
   // --- Two-factor codes ------------------------------------------------------
-  // Codes are computed asynchronously (WebCrypto) but the list needs them
-  // synchronously while rendering, so each entry's current code is cached and
-  // recomputed whenever the shared clock ticks past its period.
-  private readonly codes = signal<Map<string, string>>(new Map());
-  private computingFor = '';
 
   protected codeOf(entry: SecretEntry): string {
-    const config = this.totp.config(entry);
-    if (!config) {
-      return '';
-    }
-    // Reading the tick is what subscribes this row to the clock.
-    const slot = Math.floor(this.totp.tick() / 1000 / config.period);
-    const key = `${entry.id}:${slot}`;
-    const known = this.codes().get(key);
-    if (known !== undefined) {
-      return known;
-    }
-    void this.computeCode(entry, key);
-    // Show the previous code rather than a gap while the new one is derived.
-    return this.codes().get(`${entry.id}:${slot - 1}`) ?? '······';
-  }
-
-  private async computeCode(entry: TotpFields, key: string): Promise<void> {
-    if (this.computingFor === key) {
-      return;
-    }
-    this.computingFor = key;
-    const code = await this.totp.codeFor(entry);
-    if (code === null) {
-      return;
-    }
-    this.codes.update((map) => {
-      const next = new Map(map);
-      next.set(key, formatCode(code));
-      // Keep only what is on screen; a stale slot is never read again.
-      if (next.size > 200) {
-        next.clear();
-        next.set(key, formatCode(code));
-      }
-      return next;
-    });
+    return this.totp.liveCode(entry.id, entry);
   }
 
   /** The live code for whatever is in the form right now, before saving. */
   protected formPreviewCode(): string {
-    const config = this.totp.config(this.form);
-    if (!config) {
-      return '';
-    }
-    const slot = Math.floor(this.totp.tick() / 1000 / config.period);
-    const key = `form:${config.secret}:${slot}`;
-    const known = this.codes().get(key);
-    if (known !== undefined) {
-      return known;
-    }
-    void this.computeCode(this.form, key);
-    return this.codes().get(`form:${config.secret}:${slot - 1}`) ?? '······';
+    return this.totp.liveCode('form', this.form);
   }
 
   protected formPreviewLeft(): number {
-    const config = this.totp.config(this.form);
-    return config ? this.totp.remaining()(config.period) : 0;
+    return this.totp.secondsLeft(this.form);
   }
 
   protected secondsLeft(entry: SecretEntry): number {
-    const config = this.totp.config(entry);
-    return config ? this.totp.remaining()(config.period) : 0;
+    return this.totp.secondsLeft(entry);
   }
 
   /** Copies the code itself, without the space that makes it readable. */

@@ -6,6 +6,7 @@ export const TRANSLATIONS = {
     'app.name': 'Clipboard Sync',
     'nav.clipboard': 'Clipboard',
     'nav.secrets': 'Secrets',
+    'nav.codes': 'Codes',
     'nav.settings': 'Settings',
     'header.lock': 'Lock',
     'header.refresh': 'Refresh',
@@ -48,7 +49,8 @@ export const TRANSLATIONS = {
     'clipboard.expireAfter': 'New items expire after',
     'clipboard.paste': 'Paste from clipboard',
     'clipboard.add': 'Add',
-    'clipboard.offline': 'Offline — changes stay on this device and sync when the server is reachable.',
+    'clipboard.offline':
+      'Offline — changes stay on this device and sync when the server is reachable.',
     'clipboard.decrypting': 'Decrypting your clipboard…',
     'clipboard.empty': 'No clipboard items yet.',
     'clipboard.emptyHint': 'Everything you add is encrypted on this device before it is stored.',
@@ -79,23 +81,30 @@ export const TRANSLATIONS = {
     'files.error.empty': 'Empty files cannot be sent.',
     'files.error.decrypt': 'The file could not be decrypted — it may be damaged.',
     'files.error.tooLarge': 'This file is too large to decrypt in a browser. Use the desktop app.',
-    'files.error.tooLargePhone': 'This file is too large for the phone app (500 MB max). Use the desktop app.',
+    'files.error.tooLargePhone':
+      'This file is too large for the phone app (500 MB max). Use the desktop app.',
     'ttl.1h': '1 hour',
     'ttl.1d': '1 day',
     'ttl.1w': '1 week',
     'ttl.forever': 'Forever',
 
     'secrets.import.button': 'Import from KeePass',
-    'secrets.import.hint': 'In KeePass: File ▸ Export ▸ KeePass XML (2.x), then choose that file here',
+    'secrets.import.hint':
+      'In KeePass: File ▸ Export ▸ KeePass XML (2.x), then choose that file here',
     'secrets.import.title': 'Import from KeePass',
     'secrets.import.found': 'The file has {g} group(s) and {n} password(s).',
-    'secrets.import.attachments': '{n} entries have file attachments; the attachments are not imported.',
-    'secrets.import.safe': 'Read on this device only and encrypted before it is stored. Groups keep their structure; the Recycle Bin and old versions are skipped; importing again does not create duplicates.',
+    'secrets.import.attachments':
+      '{n} entries have file attachments; the attachments are not imported.',
+    'secrets.import.safe':
+      'Read on this device only and encrypted before it is stored. Groups keep their structure; the Recycle Bin and old versions are skipped; importing again does not create duplicates.',
     'secrets.import.run': 'Import',
     'secrets.import.progress': 'Importing… {done} / {total}',
-    'secrets.import.done': 'Imported {n} password(s) into {g} new group(s). {d} already there were skipped.',
-    'secrets.import.deleteFile': 'Now delete the exported XML file: it holds your passwords unencrypted.',
-    'secrets.import.notKeePass': 'That file is not a KeePass XML export. In KeePass use File ▸ Export ▸ KeePass XML (2.x).',
+    'secrets.import.done':
+      'Imported {n} password(s) into {g} new group(s). {d} already there were skipped.',
+    'secrets.import.deleteFile':
+      'Now delete the exported XML file: it holds your passwords unencrypted.',
+    'secrets.import.notKeePass':
+      'That file is not a KeePass XML export. In KeePass use File ▸ Export ▸ KeePass XML (2.x).',
     'secrets.groups': 'Groups',
     'secrets.group': 'Group',
     'secrets.rootGroup': 'Passwords',
@@ -109,9 +118,25 @@ export const TRANSLATIONS = {
     'secrets.expand': 'Expand',
     'secrets.collapse': 'Collapse',
     'secrets.searchAll': 'Search results (all groups)',
-    'secrets.groupEmpty': 'No passwords in this group yet. Add one, or drag one here from another group.',
-    'secrets.noGroupsHint': 'Organise passwords into groups, like folders. Drag a password onto a group to move it.',
-    'secrets.deleteGroupConfirm': 'Delete the group “{name}”? Its {n} password(s) and {g} subgroup(s) move to “{parent}”.',
+    'secrets.groupEmpty':
+      'No passwords in this group yet. Add one, or drag one here from another group.',
+    'secrets.noGroupsHint':
+      'Organise passwords into groups, like folders. Drag a password onto a group to move it.',
+    'secrets.deleteGroupConfirm':
+      'Delete the group “{name}”? Its {n} password(s) and {g} subgroup(s) move to “{parent}”.',
+    'codes.title': 'Two-factor codes',
+    'codes.manage': 'Manage in Secrets',
+    'codes.loading': 'Opening your codes…',
+    'codes.tapHint': 'Tap a code to copy it. The clipboard clears itself afterwards.',
+    'codes.search': 'Search codes…',
+    'codes.noMatch': 'No codes match “{q}”.',
+    'codes.copied': 'Copied ✓',
+    'codes.copyOne': 'Copy the code for {title}',
+    'codes.secondsLeft': '{n}s until the next code',
+    'codes.empty': 'No two-factor codes yet.',
+    'codes.emptyHint':
+      'Add a key to a password in Secrets — scan the QR code the site shows — and its codes appear here.',
+    'codes.emptyAction': 'Go to Secrets',
     'secrets.title': 'Secrets',
     'secrets.add': 'Add secret',
     'secrets.copiedLabel': 'Copied {label} — clipboard clears in {n}s.',
@@ -157,14 +182,16 @@ export const TRANSLATIONS = {
 
     'biometric.title': 'Fingerprint unlock',
     'biometric.setting': 'Unlock with fingerprint on this phone',
-    'biometric.hint': 'Your vault key is sealed in the phone’s secure hardware and only a fingerprint can release it. Adding a new fingerprint to the phone turns this off; your passphrase always still works.',
+    'biometric.hint':
+      'Your vault key is sealed in the phone’s secure hardware and only a fingerprint can release it. Adding a new fingerprint to the phone turns this off; your passphrase always still works.',
     'biometric.offer': 'Unlock with fingerprint next time',
     'biometric.unlockButton': 'Unlock with fingerprint',
     'biometric.orPassphrase': 'or enter your passphrase',
     'biometric.enrollTitle': 'Turn on fingerprint unlock',
     'biometric.unlockTitle': 'Unlock Clipboard Sync',
     'biometric.usePassphrase': 'Use passphrase',
-    'biometric.invalidated': 'Fingerprints on this phone changed, so fingerprint unlock was turned off. Unlock with your passphrase to turn it back on.',
+    'biometric.invalidated':
+      'Fingerprints on this phone changed, so fingerprint unlock was turned off. Unlock with your passphrase to turn it back on.',
     'biometric.failed': 'Fingerprint unlock did not work. Use your passphrase.',
     'biometric.enableFailed': 'Could not turn on fingerprint unlock.',
     'settings.title': 'Settings',
@@ -197,7 +224,8 @@ export const TRANSLATIONS = {
     'settings.recovery': 'Recovery code',
     'settings.recoveryIntro':
       'A recovery code lets you unlock your vault if you forget your passphrase. Store it somewhere safe — anyone with it can open your vault, and it is the only way back in if the passphrase is lost.',
-    'settings.recoveryWarn': 'Write this down now. It is shown only once and cannot be retrieved later.',
+    'settings.recoveryWarn':
+      'Write this down now. It is shown only once and cannot be retrieved later.',
     'settings.recoverySaved': 'I saved it',
     'settings.recoveryStatusSet': 'a recovery code is set',
     'settings.recoveryStatusNone': 'no recovery code',
@@ -235,7 +263,8 @@ export const TRANSLATIONS = {
     'autofill.cancel': 'Not now',
     'autofill.failed': 'Could not fill that. Try again.',
     'autofill.saveTitle': 'Save this password?',
-    'autofill.saveIntro': 'It will be encrypted on this device before it is stored, like everything else in your vault.',
+    'autofill.saveIntro':
+      'It will be encrypted on this device before it is stored, like everything else in your vault.',
     'autofill.saveIntroNoPassword':
       'This sign-in has no password to keep — it sends a code instead. Saving the address still means you never have to remember which one you used here.',
     'autofill.forSite': 'For',
@@ -259,6 +288,7 @@ export const TRANSLATIONS = {
     'app.name': 'مزامنة الحافظة',
     'nav.clipboard': 'الحافظة',
     'nav.secrets': 'الأسرار',
+    'nav.codes': 'الأكواد',
     'nav.settings': 'الإعدادات',
     'header.lock': 'قفل',
     'header.refresh': 'تحديث',
@@ -332,7 +362,8 @@ export const TRANSLATIONS = {
     'files.error.empty': 'لا يمكن إرسال ملف فارغ.',
     'files.error.decrypt': 'تعذّر فكّ تشفير الملف — ربما يكون تالفًا.',
     'files.error.tooLarge': 'الملف أكبر من أن يُفكّ تشفيره في المتصفح. استخدم تطبيق سطح المكتب.',
-    'files.error.tooLargePhone': 'الملف أكبر من المسموح في تطبيق الموبايل (500 ميجا). استخدم تطبيق سطح المكتب.',
+    'files.error.tooLargePhone':
+      'الملف أكبر من المسموح في تطبيق الموبايل (500 ميجا). استخدم تطبيق سطح المكتب.',
     'ttl.1h': 'ساعة',
     'ttl.1d': 'يوم',
     'ttl.1w': 'أسبوع',
@@ -343,12 +374,14 @@ export const TRANSLATIONS = {
     'secrets.import.title': 'استيراد من KeePass',
     'secrets.import.found': 'الملف فيه {g} مجموعة و{n} كلمة سر.',
     'secrets.import.attachments': '{n} عنصر فيه ملفات مرفقة؛ المرفقات لن تُستورد.',
-    'secrets.import.safe': 'يُقرأ على هذا الجهاز فقط ويُشفَّر قبل التخزين. المجموعات تحتفظ بترتيبها، وسلة المحذوفات والنسخ القديمة لا تُستورد، والاستيراد مرة أخرى لا يكرر العناصر.',
+    'secrets.import.safe':
+      'يُقرأ على هذا الجهاز فقط ويُشفَّر قبل التخزين. المجموعات تحتفظ بترتيبها، وسلة المحذوفات والنسخ القديمة لا تُستورد، والاستيراد مرة أخرى لا يكرر العناصر.',
     'secrets.import.run': 'استيراد',
     'secrets.import.progress': 'جارٍ الاستيراد… {done} / {total}',
     'secrets.import.done': 'تم استيراد {n} كلمة سر في {g} مجموعة جديدة. تم تخطي {d} موجودة بالفعل.',
     'secrets.import.deleteFile': 'احذف الآن ملف XML المُصدَّر: فيه كلمات السر بدون تشفير.',
-    'secrets.import.notKeePass': 'هذا الملف ليس تصدير KeePass XML. في KeePass استخدم File ▸ Export ▸ KeePass XML (2.x).',
+    'secrets.import.notKeePass':
+      'هذا الملف ليس تصدير KeePass XML. في KeePass استخدم File ▸ Export ▸ KeePass XML (2.x).',
     'secrets.groups': 'المجموعات',
     'secrets.group': 'مجموعة',
     'secrets.rootGroup': 'كلمات السر',
@@ -362,9 +395,25 @@ export const TRANSLATIONS = {
     'secrets.expand': 'توسيع',
     'secrets.collapse': 'طيّ',
     'secrets.searchAll': 'نتائج البحث (كل المجموعات)',
-    'secrets.groupEmpty': 'لا توجد كلمات سر في هذه المجموعة بعد. أضف واحدة، أو اسحب واحدة إلى هنا من مجموعة أخرى.',
-    'secrets.noGroupsHint': 'نظّم كلمات السر في مجموعات مثل المجلدات. اسحب كلمة سر إلى مجموعة لنقلها.',
-    'secrets.deleteGroupConfirm': 'حذف المجموعة «{name}»؟ ستنتقل {n} كلمة سر و{g} مجموعة فرعية إلى «{parent}».',
+    'secrets.groupEmpty':
+      'لا توجد كلمات سر في هذه المجموعة بعد. أضف واحدة، أو اسحب واحدة إلى هنا من مجموعة أخرى.',
+    'secrets.noGroupsHint':
+      'نظّم كلمات السر في مجموعات مثل المجلدات. اسحب كلمة سر إلى مجموعة لنقلها.',
+    'secrets.deleteGroupConfirm':
+      'حذف المجموعة «{name}»؟ ستنتقل {n} كلمة سر و{g} مجموعة فرعية إلى «{parent}».',
+    'codes.title': 'أكواد التحقق',
+    'codes.manage': 'التعديل من الأسرار',
+    'codes.loading': 'جارٍ فتح الأكواد…',
+    'codes.tapHint': 'دوس على أي كود عشان يتنسخ. الحافظة تُمسح بعدها تلقائيًا.',
+    'codes.search': 'ابحث في الأكواد…',
+    'codes.noMatch': 'لا أكواد تطابق «{q}».',
+    'codes.copied': 'تم النسخ ✓',
+    'codes.copyOne': 'انسخ كود {title}',
+    'codes.secondsLeft': 'باقي {n} ث للكود الجديد',
+    'codes.empty': 'لا أكواد تحقق بعد.',
+    'codes.emptyHint':
+      'أضف مفتاحًا لكلمة مرور من صفحة الأسرار — امسح رمز QR الذي يعرضه الموقع — وتظهر أكواده هنا.',
+    'codes.emptyAction': 'اذهب إلى الأسرار',
     'secrets.title': 'الأسرار',
     'secrets.add': 'إضافة سر',
     'secrets.copiedLabel': 'تم نسخ {label} — تُمسح الحافظة خلال {n} ث.',
@@ -399,7 +448,8 @@ export const TRANSLATIONS = {
     'secrets.save': 'حفظ',
     'secrets.decrypting': 'جارٍ فكّ تشفير أسرارك…',
     'secrets.empty': 'لا توجد أسرار بعد.',
-    'secrets.emptyHint': 'مخزّنة بتشفير من طرف إلى طرف. كلمات المرور المنسوخة تُمسح من الحافظة تلقائيًا.',
+    'secrets.emptyHint':
+      'مخزّنة بتشفير من طرف إلى طرف. كلمات المرور المنسوخة تُمسح من الحافظة تلقائيًا.',
     'secrets.search': 'ابحث في الأسرار…',
     'secrets.noMatch': 'لا أسرار تطابق «{q}».',
     'secrets.copyUser': 'نسخ المستخدم',
@@ -409,14 +459,16 @@ export const TRANSLATIONS = {
 
     'biometric.title': 'الفتح بالبصمة',
     'biometric.setting': 'افتح بالبصمة على هذا الموبايل',
-    'biometric.hint': 'مفتاح خزنتك محفوظ في العتاد الآمن للموبايل ولا تفتحه إلا البصمة. إضافة بصمة جديدة للموبايل تلغي هذا الخيار، وكلمة السر تعمل دائمًا.',
+    'biometric.hint':
+      'مفتاح خزنتك محفوظ في العتاد الآمن للموبايل ولا تفتحه إلا البصمة. إضافة بصمة جديدة للموبايل تلغي هذا الخيار، وكلمة السر تعمل دائمًا.',
     'biometric.offer': 'افتح بالبصمة المرة الجاية',
     'biometric.unlockButton': 'افتح بالبصمة',
     'biometric.orPassphrase': 'أو اكتب كلمة السر',
     'biometric.enrollTitle': 'تفعيل الفتح بالبصمة',
     'biometric.unlockTitle': 'فتح Clipboard Sync',
     'biometric.usePassphrase': 'استخدم كلمة السر',
-    'biometric.invalidated': 'البصمات على الموبايل اتغيرت، فتم إيقاف الفتح بالبصمة. افتح بكلمة السر لتفعيله من جديد.',
+    'biometric.invalidated':
+      'البصمات على الموبايل اتغيرت، فتم إيقاف الفتح بالبصمة. افتح بكلمة السر لتفعيله من جديد.',
     'biometric.failed': 'الفتح بالبصمة لم ينجح. استخدم كلمة السر.',
     'biometric.enableFailed': 'تعذّر تفعيل الفتح بالبصمة.',
     'settings.title': 'الإعدادات',

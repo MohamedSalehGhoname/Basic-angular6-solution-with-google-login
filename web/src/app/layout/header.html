@@ -10,6 +10,7 @@
           {{ i18n.t('nav.clipboard') }}
         </a>
         <a routerLink="/secrets" routerLinkActive="active">{{ i18n.t('nav.secrets') }}</a>
+        <a routerLink="/codes" routerLinkActive="active">{{ i18n.t('nav.codes') }}</a>
         <a routerLink="/settings" routerLinkActive="active">{{ i18n.t('nav.settings') }}</a>
       </nav>
     }
@@ -55,9 +56,13 @@
         }
         <span class="name">{{ user.displayName ?? user.email }}</span>
         @if (vault.status() === 'unlocked') {
-          <button type="button" class="btn-ghost" (click)="lockVault()">{{ i18n.t('header.lock') }}</button>
+          <button type="button" class="btn-ghost" (click)="lockVault()">
+            {{ i18n.t('header.lock') }}
+          </button>
         }
-        <button type="button" class="btn-ghost" (click)="signOut()">{{ i18n.t('header.signOut') }}</button>
+        <button type="button" class="btn-ghost" (click)="signOut()">
+          {{ i18n.t('header.signOut') }}
+        </button>
       </div>
     }
   </div>
