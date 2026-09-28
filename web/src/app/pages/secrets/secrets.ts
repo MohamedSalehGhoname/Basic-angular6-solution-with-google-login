@@ -9,6 +9,7 @@ import {
 } from '../../core/groups-store';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { fileToAttachment } from '../../core/image-utils';
+import { type ParsedCsv, parseCsvPasswords } from '../../core/csv-import';
 import {
   type ImportResult,
   type ParsedKeePass,
@@ -332,7 +333,9 @@ export class Secrets {
 
   // --- KeePass import ------------------------------------------------------
 
-  protected readonly importPreview = signal<ParsedKeePass | null>(null);
+  protected readonly importPreview = signal<ParsedKeePass | ParsedCsv | null>(null);
+  /** A browser export has no groups, so its preview reads differently. */
+  protected readonly importCsv = signal<ParsedCsv | null>(null);
   protected readonly importProgress = signal<{ done: number; total: number } | null>(null);
   protected readonly importResult = signal<ImportResult | null>(null);
 
@@ -344,10 +347,21 @@ export class Secrets {
     }
     this.error.set(null);
     this.importResult.set(null);
+    this.importCsv.set(null);
+    const text = await file.text();
+    // KeePass exports XML, browsers export CSV; the file itself says which,
+    // so the user does not have to pick the right button first.
+    const isXml = text.trimStart().startsWith('<');
     try {
-      this.importPreview.set(parseKeePassXml(await file.text()));
+      if (isXml) {
+        this.importPreview.set(parseKeePassXml(text));
+      } else {
+        const parsed = parseCsvPasswords(text);
+        this.importCsv.set(parsed);
+        this.importPreview.set(parsed);
+      }
     } catch {
-      this.error.set(this.i18n.t('secrets.import.notKeePass'));
+      this.error.set(this.i18n.t(isXml ? 'secrets.import.notKeePass' : 'secrets.import.notCsv'));
     }
   }
 
@@ -364,6 +378,7 @@ export class Secrets {
       );
       this.importResult.set(result);
       this.importPreview.set(null);
+      this.importCsv.set(null);
       this.selectGroup(null);
     } catch (err) {
       this.error.set(err instanceof Error ? err.message : 'The import stopped part-way.');

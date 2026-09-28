@@ -88,9 +88,9 @@ export const TRANSLATIONS = {
     'ttl.1w': '1 week',
     'ttl.forever': 'Forever',
 
-    'secrets.import.button': 'Import from KeePass',
+    'secrets.import.button': 'Import passwords',
     'secrets.import.hint':
-      'In KeePass: File ▸ Export ▸ KeePass XML (2.x), then choose that file here',
+      'From Chrome: Settings ▸ Autofill ▸ Google Password Manager ▸ Settings ▸ Export passwords. From KeePass: File ▸ Export ▸ KeePass XML (2.x). Then choose that file here.',
     'secrets.import.title': 'Import from KeePass',
     'secrets.import.found': 'The file has {g} group(s) and {n} password(s).',
     'secrets.import.attachments':
@@ -102,7 +102,15 @@ export const TRANSLATIONS = {
     'secrets.import.done':
       'Imported {n} password(s) into {g} new group(s). {d} already there were skipped.',
     'secrets.import.deleteFile':
-      'Now delete the exported XML file: it holds your passwords unencrypted.',
+      'Now delete the file you exported: it holds your passwords unencrypted.',
+    'secrets.import.csvTitle': 'Import from your browser',
+    'secrets.import.csvSafe':
+      'Read on this device only and encrypted before it is stored. They all land in Passwords, where you can sort them into groups; importing again does not create duplicates.',
+    'secrets.import.csvFound': 'The file has {n} password(s).',
+    'secrets.import.csvTotp': '{n} of them also bring a two-factor key.',
+    'secrets.import.csvEmpty': '{n} row(s) had no username or password and will be left out.',
+    'secrets.import.notCsv':
+      'That file does not look like an exported password list. Export again from your browser’s password manager.',
     'secrets.import.notKeePass':
       'That file is not a KeePass XML export. In KeePass use File ▸ Export ▸ KeePass XML (2.x).',
     'secrets.groups': 'Groups',
@@ -369,8 +377,9 @@ export const TRANSLATIONS = {
     'ttl.1w': 'أسبوع',
     'ttl.forever': 'للأبد',
 
-    'secrets.import.button': 'استيراد من KeePass',
-    'secrets.import.hint': 'في KeePass: File ▸ Export ▸ KeePass XML (2.x)، ثم اختر الملف هنا',
+    'secrets.import.button': 'استيراد كلمات السر',
+    'secrets.import.hint':
+      'من كروم: الإعدادات ▸ الملء التلقائي ▸ مدير كلمات السر ▸ الإعدادات ▸ تصدير كلمات السر. ومن KeePass: File ▸ Export ▸ KeePass XML (2.x). ثم اختر الملف هنا.',
     'secrets.import.title': 'استيراد من KeePass',
     'secrets.import.found': 'الملف فيه {g} مجموعة و{n} كلمة سر.',
     'secrets.import.attachments': '{n} عنصر فيه ملفات مرفقة؛ المرفقات لن تُستورد.',
@@ -379,7 +388,15 @@ export const TRANSLATIONS = {
     'secrets.import.run': 'استيراد',
     'secrets.import.progress': 'جارٍ الاستيراد… {done} / {total}',
     'secrets.import.done': 'تم استيراد {n} كلمة سر في {g} مجموعة جديدة. تم تخطي {d} موجودة بالفعل.',
-    'secrets.import.deleteFile': 'احذف الآن ملف XML المُصدَّر: فيه كلمات السر بدون تشفير.',
+    'secrets.import.deleteFile': 'احذف الآن الملف الذي صدّرته: فيه كلمات السر بدون تشفير.',
+    'secrets.import.csvTitle': 'استيراد من المتصفح',
+    'secrets.import.csvSafe':
+      'يُقرأ على هذا الجهاز فقط ويُشفَّر قبل التخزين. كلها تنزل في «كلمات السر» وتقدر توزّعها على مجموعات بعدين، والاستيراد مرة أخرى لا يكرر العناصر.',
+    'secrets.import.csvFound': 'الملف فيه {n} كلمة سر.',
+    'secrets.import.csvTotp': '{n} منها معها مفتاح تحقق بخطوتين.',
+    'secrets.import.csvEmpty': '{n} صف بدون اسم مستخدم أو كلمة سر، وسيُترك.',
+    'secrets.import.notCsv':
+      'هذا الملف لا يبدو قائمة كلمات سر مُصدَّرة. صدّرها مرة أخرى من مدير كلمات السر في متصفحك.',
     'secrets.import.notKeePass':
       'هذا الملف ليس تصدير KeePass XML. في KeePass استخدم File ▸ Export ▸ KeePass XML (2.x).',
     'secrets.groups': 'المجموعات',
