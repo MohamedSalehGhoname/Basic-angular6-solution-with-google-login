@@ -11,6 +11,7 @@ import {
 } from '../../core/auto-lock.service';
 import { AutofillService } from '../../core/autofill.service';
 import { BiometricUnlockService } from '../../core/biometric-unlock.service';
+import { SecretsStore } from '../../core/secrets-store';
 import { DesktopCaptureService } from '../../core/desktop-capture.service';
 import { FileShareService } from '../../core/file-share.service';
 import { ThemeService, type ThemePreference } from '../../core/theme.service';
@@ -33,6 +34,34 @@ export class Settings {
   protected readonly biometricError = signal<string | null>(null);
   protected readonly autofill = inject(AutofillService);
   protected readonly autoLock = inject(AutoLockService);
+  protected readonly secrets = inject(SecretsStore);
+  protected readonly sealing = signal<{ done: number; total: number } | null>(null);
+  protected readonly sealed = signal<number | null>(null);
+  protected readonly sealError = signal<string | null>(null);
+
+  /**
+   * Rewrites entries saved before passwords were sealed away from the rest of
+   * the entry. They are read either way, so this is housekeeping the user can
+   * run when it suits them.
+   */
+  protected async sealOldEntries(): Promise<void> {
+    if (this.sealing()) {
+      return;
+    }
+    this.sealError.set(null);
+    this.sealed.set(null);
+    this.sealing.set({ done: 0, total: this.secrets.legacyCount() });
+    try {
+      const done = await this.secrets.migrateLegacy((d, total) =>
+        this.sealing.set({ done: d, total }),
+      );
+      this.sealed.set(done);
+    } catch (err) {
+      this.sealError.set(err instanceof Error ? err.message : 'Could not finish.');
+    } finally {
+      this.sealing.set(null);
+    }
+  }
   protected readonly autoLockChoices = AUTO_LOCK_CHOICES;
 
   protected setAutoLock(minutes: string): void {

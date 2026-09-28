@@ -10,7 +10,7 @@ import { ClipboardCopyService } from '../../core/clipboard-copy.service';
 import { GroupsStore } from '../../core/groups-store';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { QrScannerService } from '../../core/qr-scanner.service';
-import { SecretsStore, type SecretEntry } from '../../core/secrets-store';
+import { SecretsStore, type SecretEntry, type SecretSecrets } from '../../core/secrets-store';
 import { TOTP_DEFAULTS, parseTotp } from '../../core/totp';
 import { TotpService } from '../../core/totp.service';
 
@@ -45,7 +45,32 @@ export class Codes {
   private copiedTimer: ReturnType<typeof setTimeout> | null = null;
 
   /** Everything that has a key, in the store's alphabetical order. */
-  protected readonly withCodes = computed(() => this.store.items().filter((entry) => !!entry.totp));
+  protected readonly withCodes = computed(() =>
+    this.store.items().filter((entry) => this.store.hasCode(entry)),
+  );
+
+  /**
+   * The keys this screen has opened. Only entries that have a code are opened,
+   * and only while this screen is up — the rest of the vault stays sealed.
+   */
+  private readonly configs = signal<Map<string, SecretSecrets>>(new Map());
+  private opening = new Set<string>();
+
+  private configOf(entry: SecretEntry): SecretSecrets | null {
+    const known = this.configs().get(entry.id);
+    if (known) {
+      return known;
+    }
+    if (!this.opening.has(entry.id)) {
+      this.opening.add(entry.id);
+      void this.store
+        .open(entry.id)
+        .then((secrets) => this.configs.update((map) => new Map(map).set(entry.id, secrets)))
+        .catch(() => this.error.set(this.i18n.t('secrets.openFailed')))
+        .finally(() => this.opening.delete(entry.id));
+    }
+    return null;
+  }
 
   protected readonly filtered = computed(() => {
     const query = this.search().trim().toLowerCase();
@@ -99,10 +124,22 @@ export class Codes {
 
   protected readonly batchesLeft = computed(() => this.batchCount() - this.batchesSeen().size);
 
-  /** Accounts whose key is already in the vault, so they are not added twice. */
-  private readonly knownSecrets = computed(
-    () => new Set(this.store.items().map((entry) => entry.totp ?? '')),
-  );
+  /**
+   * Keys already in the vault, so an import does not add one twice. Only the
+   * entries that have a code are opened, and only while the import card is up.
+   */
+  private readonly knownSecrets = signal<Set<string>>(new Set());
+
+  private async loadKnownSecrets(): Promise<void> {
+    const keys = new Set<string>();
+    for (const entry of this.withCodes()) {
+      const secrets = this.configs().get(entry.id) ?? (await this.store.open(entry.id));
+      if (secrets.totp) {
+        keys.add(secrets.totp);
+      }
+    }
+    this.knownSecrets.set(keys);
+  }
 
   protected alreadyHave(account: MigrationAccount): boolean {
     return this.knownSecrets().has(account.secret);
@@ -121,6 +158,7 @@ export class Codes {
       if (value === null) {
         return;
       }
+      await this.loadKnownSecrets();
       this.readScan(value);
     } catch {
       this.error.set(this.i18n.t('codes.import.scanFailed'));
@@ -208,16 +246,19 @@ export class Codes {
   // --- Codes on screen -------------------------------------------------------
 
   protected codeOf(entry: SecretEntry): string {
-    return this.totp.liveCode(entry.id, entry);
+    const secrets = this.configOf(entry);
+    return secrets ? this.totp.liveCode(entry.id, secrets) : '······';
   }
 
   protected secondsLeft(entry: SecretEntry): number {
-    return this.totp.secondsLeft(entry);
+    const secrets = this.configOf(entry);
+    return secrets ? this.totp.secondsLeft(secrets) : 0;
   }
 
   /** How much of the current code's life is left, for the countdown ring. */
   protected fractionLeft(entry: SecretEntry): number {
-    const period = this.totp.config(entry)?.period ?? 0;
+    const secrets = this.configOf(entry);
+    const period = secrets ? (this.totp.config(secrets)?.period ?? 0) : 0;
     return period > 0 ? this.secondsLeft(entry) / period : 0;
   }
 
@@ -240,7 +281,7 @@ export class Codes {
   protected async copy(entry: SecretEntry): Promise<void> {
     this.error.set(null);
     try {
-      const code = await this.totp.codeFor(entry);
+      const code = await this.totp.codeFor(await this.store.open(entry.id));
       if (!code) {
         return;
       }

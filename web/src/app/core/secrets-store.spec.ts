@@ -62,8 +62,60 @@ describe('SecretsStore', () => {
     const stored = store.items()[0];
     expect(stored.title).toBe('GitHub');
     expect(stored.username).toBe('octocat');
-    expect(stored.password).toBe('hunter2');
     expect(stored.url).toBe('https://github.com');
+    // The password is not part of the row; it has to be asked for.
+    expect((await store.open(stored.id)).password).toBe('hunter2');
+  });
+
+  it('keeps the password out of the half that is decrypted on unlock', async () => {
+    const entry = await store.add(fields({ password: 'sealed-pw', notes: 'private note' }));
+    // What the list reads when the vault opens: the outer layer only.
+    const outer = store.items()[0] as unknown as Record<string, unknown>;
+    expect(JSON.stringify(outer)).not.toContain('sealed-pw');
+    expect(JSON.stringify(outer)).not.toContain('private note');
+    expect(outer['sealed']).toMatch(/^xcv1:/);
+    // And it says what is inside without saying what it is.
+    expect(store.hasPassword(entry!)).toBe(true);
+    expect(store.hasNotes(entry!)).toBe(true);
+    expect(store.hasCode(entry!)).toBe(false);
+  });
+
+  it('reads an entry written before the split, and seals it when saved', async () => {
+    // Live events only apply to a collection that has loaded.
+    await store.load();
+    // A device on an older build writes its secrets in the open.
+    const legacy = await vault.encryptItem(
+      JSON.stringify({
+        title: 'Old entry',
+        username: 'me',
+        password: 'old-pw',
+        url: '',
+        notes: 'old note',
+        attachments: [],
+        totp: 'GEZDGNBVGY3TQOJQ',
+        createdAt: 1,
+        updatedAt: 1,
+      }),
+    );
+    syncApi.emit({
+      type: 'item-added',
+      collection: 'secrets',
+      item: { id: 'legacy-1', blob: legacy, createdAt: 1 },
+    });
+    await waitFor(() => store.items().some((entry) => entry.id === 'legacy-1'));
+
+    const entry = store.items().find((item) => item.id === 'legacy-1')!;
+    expect(store.hasPassword(entry)).toBe(true);
+    expect(store.hasCode(entry)).toBe(true);
+    expect((await store.open('legacy-1')).password).toBe('old-pw');
+    expect(store.legacyCount()).toBe(1);
+
+    expect(await store.migrateLegacy()).toBe(1);
+    expect(store.legacyCount()).toBe(0);
+    const sealed = store.items().find((item) => item.id === 'legacy-1')!;
+    expect(JSON.stringify(sealed)).not.toContain('old-pw');
+    expect((await store.open('legacy-1')).password).toBe('old-pw');
+    expect((await store.open('legacy-1')).totp).toBe('GEZDGNBVGY3TQOJQ');
   });
 
   it('keeps the two-factor key and its settings through a save', async () => {
@@ -74,24 +126,26 @@ describe('SecretsStore', () => {
       fields({ totp: 'GEZDGNBVGY3TQOJQ', totpDigits: 8, totpPeriod: 60, totpAlgorithm: 'SHA-256' }),
     );
     const stored = store.items()[0]!;
-    expect(stored.totp).toBe('GEZDGNBVGY3TQOJQ');
-    expect(stored.totpDigits).toBe(8);
-    expect(stored.totpPeriod).toBe(60);
-    expect(stored.totpAlgorithm).toBe('SHA-256');
+    const secrets = await store.open(stored.id);
+    expect(secrets.totp).toBe('GEZDGNBVGY3TQOJQ');
+    expect(secrets.totpDigits).toBe(8);
+    expect(secrets.totpPeriod).toBe(60);
+    expect(secrets.totpAlgorithm).toBe('SHA-256');
 
-    await store.save(stored.id, fields({ ...stored, title: 'Renamed' }));
+    await store.save(stored.id, { ...(await store.fields(stored.id)), title: 'Renamed' });
     const edited = store.items()[0]!;
     expect(edited.title).toBe('Renamed');
-    expect(edited.totp).toBe('GEZDGNBVGY3TQOJQ');
+    expect((await store.open(edited.id)).totp).toBe('GEZDGNBVGY3TQOJQ');
   });
 
   it('drops the two-factor settings when the key is removed', async () => {
     await store.add(fields({ totp: 'GEZDGNBVGY3TQOJQ', totpDigits: 8 }));
     const stored = store.items()[0]!;
-    await store.save(stored.id, fields({ ...stored, totp: null }));
-    const cleared = store.items()[0]!;
+    await store.save(stored.id, { ...(await store.fields(stored.id)), totp: null });
+    const cleared = await store.open(store.items()[0]!.id);
     expect(cleared.totp).toBeNull();
     expect(cleared.totpDigits).toBeNull();
+    expect(store.hasCode(store.items()[0]!)).toBe(false);
   });
 
   it('keeps every entry of a large import instead of dropping the overflow', async () => {
@@ -138,7 +192,8 @@ describe('SecretsStore', () => {
       data: 'data:image/jpeg;base64,/9j/AAAA',
     };
     const entry = await store.add(fields({ title: 'With image', attachments: [attachment] }));
-    expect(entry!.attachments).toEqual([attachment]);
+    expect((await store.open(entry!.id)).attachments).toEqual([attachment]);
+    expect(store.attachmentCount(entry!)).toBe(1);
 
     // Nothing about the image leaks into the stored ciphertext.
     for (const item of syncApi.collections.get('secrets')!.values()) {
@@ -151,7 +206,7 @@ describe('SecretsStore', () => {
     configure();
     await vault.unlock('a long passphrase');
     await store.load();
-    expect(store.items()[0].attachments).toEqual([attachment]);
+    expect((await store.open(store.items()[0].id)).attachments).toEqual([attachment]);
   });
 
   it('stores only ciphertext, never the password, in its own collection', async () => {
@@ -181,7 +236,7 @@ describe('SecretsStore', () => {
     await store.save(github!.id, fields({ title: 'GitHub', password: 'rotated-pw' }));
 
     const edited = store.items().find((entry) => entry.id === github!.id)!;
-    expect(edited.password).toBe('rotated-pw');
+    expect((await store.open(edited.id)).password).toBe('rotated-pw');
     expect(store.items().map((entry) => entry.title)).toEqual(['Bank', 'GitHub']);
     expect(edited.updatedAt).toBeGreaterThanOrEqual(edited.createdAt);
   });
@@ -218,7 +273,8 @@ describe('SecretsStore', () => {
       item: { id: entry!.id, blob: updatedBlob, createdAt: entry!.createdAt },
     });
 
-    await waitFor(() => store.items()[0]?.password === 'new-from-phone');
+    await waitFor(() => store.items()[0]?.updatedAt !== entry!.updatedAt);
+    expect((await store.open(entry!.id)).password).toBe('new-from-phone');
   });
 
   it('ignores events for the clipboard collection', async () => {

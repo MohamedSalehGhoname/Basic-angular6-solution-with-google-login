@@ -2,7 +2,9 @@
   <section class="card">
     @if (req.kind === 'save') {
       <h2>{{ i18n.t('autofill.saveTitle') }}</h2>
-      <p class="muted">{{ req.password ? i18n.t('autofill.saveIntro') : i18n.t('autofill.saveIntroNoPassword') }}</p>
+      <p class="muted">
+        {{ req.password ? i18n.t('autofill.saveIntro') : i18n.t('autofill.saveIntroNoPassword') }}
+      </p>
 
       <dl class="captured">
         <dt>{{ i18n.t('autofill.forSite') }}</dt>
@@ -28,7 +30,9 @@
       </div>
     } @else {
       <h2>{{ i18n.t('autofill.fillTitle') }}</h2>
-      <p class="muted">{{ i18n.t('autofill.fillIntro') }} <strong>{{ req.identity }}</strong></p>
+      <p class="muted">
+        {{ i18n.t('autofill.fillIntro') }} <strong>{{ req.identity }}</strong>
+      </p>
 
       <input
         type="search"

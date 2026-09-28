@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AutofillService, matchScore } from '../../core/autofill.service';
 import { I18nService } from '../../core/i18n/i18n.service';
-import { SecretsStore } from '../../core/secrets-store';
+import { SecretsStore, type SecretEntry } from '../../core/secrets-store';
 import { VaultService } from '../../core/vault.service';
 
 /**
@@ -77,11 +77,17 @@ export class Autofill {
     await this.secrets.load();
   }
 
-  protected async fill(secret: { title: string; username: string; password: string }): Promise<void> {
+  /**
+   * Hands one entry's values back to Android. The password is sealed until
+   * here: picking the entry (after the fingerprint check that opened this
+   * screen) is what opens it, and nothing else on this screen needed it.
+   */
+  protected async fill(secret: SecretEntry): Promise<void> {
     this.error.set(null);
     this.busy.set(true);
     try {
-      await this.autofill.respond(secret);
+      const { password } = await this.secrets.open(secret.id);
+      await this.autofill.respond({ title: secret.title, username: secret.username, password });
     } catch {
       this.error.set(this.i18n.t('autofill.failed'));
       this.busy.set(false);

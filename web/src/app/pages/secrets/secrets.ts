@@ -24,6 +24,7 @@ import {
   SecretsStore,
   type SecretEntry,
   type SecretFields,
+  type SecretSecrets,
 } from '../../core/secrets-store';
 import { TOTP_DEFAULTS, type TotpConfig, parseTotp } from '../../core/totp';
 import { TotpService } from '../../core/totp.service';
@@ -72,8 +73,19 @@ export class Secrets {
   protected readonly editingId = signal<string | null>(null);
   protected readonly formOpen = signal(false);
   protected readonly revealed = signal<Set<string>>(new Set());
+  /**
+   * Entries the user has opened on this screen. A row shows a name and an
+   * address without opening anything; revealing, copying, editing or reading
+   * a code is what asks the store for the sealed half, and the answer is kept
+   * only while the page is up.
+   */
+  private readonly opened = signal<Map<string, SecretSecrets>>(new Map());
+  private opening = new Set<string>();
   protected readonly notesRevealed = signal<Set<string>>(new Set());
   protected readonly search = signal('');
+  /** Ids whose notes matched a deep search, or null when none has been run. */
+  protected readonly notesMatches = signal<Set<string> | null>(null);
+  protected readonly searchingNotes = signal(false);
   protected form: SecretFields = { ...EMPTY_FORM, attachments: [] };
   // Held in a signal (not on `form`) so async attach/remove updates re-render.
   protected readonly formAttachments = signal<Attachment[]>([]);
@@ -162,13 +174,54 @@ export class Secrets {
       const selected = this.selectedGroup();
       return items.filter((entry) => this.groupOf(entry) === selected);
     }
-    return items.filter((entry) =>
-      [entry.title, entry.username, entry.url, entry.notes, this.groups.path(entry.groupId)]
-        .join('\n')
-        .toLowerCase()
-        .includes(query),
+    const alsoNotes = this.notesMatches();
+    return items.filter(
+      (entry) =>
+        // Notes are sealed, so searching them would mean opening every entry;
+        // searchNotes() does that, but only when asked.
+        [entry.title, entry.username, entry.url, this.groups.path(entry.groupId)]
+          .join('\n')
+          .toLowerCase()
+          .includes(query) ||
+        (alsoNotes?.has(entry.id) ?? false),
     );
   });
+
+  protected onSearchChange(value: string): void {
+    this.search.set(value);
+    // What the last deep search found no longer applies to a new query.
+    this.notesMatches.set(null);
+  }
+
+  /**
+   * Searches inside the notes as well. That means opening every entry that has
+   * any, so it is a button rather than something typing does.
+   */
+  protected async searchNotes(): Promise<void> {
+    const query = this.search().trim().toLowerCase();
+    if (!query || this.searchingNotes()) {
+      return;
+    }
+    this.searchingNotes.set(true);
+    this.error.set(null);
+    try {
+      const matches = new Set<string>();
+      for (const entry of this.store.items()) {
+        if (!this.store.hasNotes(entry)) {
+          continue;
+        }
+        const secrets = this.opened().get(entry.id) ?? (await this.store.open(entry.id));
+        if (secrets.notes.toLowerCase().includes(query)) {
+          matches.add(entry.id);
+        }
+      }
+      this.notesMatches.set(matches);
+    } catch {
+      this.error.set(this.i18n.t('secrets.openFailed'));
+    } finally {
+      this.searchingNotes.set(false);
+    }
+  }
 
   constructor() {
     void this.init();
@@ -398,26 +451,45 @@ export class Secrets {
     this.formOpen.set(true);
   }
 
-  protected startEdit(entry: SecretEntry): void {
-    this.form = {
-      title: entry.title,
-      username: entry.username,
-      password: entry.password,
-      url: entry.url,
-      notes: entry.notes,
-      attachments: [],
-      groupId: this.groupOf(entry),
-      totp: entry.totp ?? null,
-      totpDigits: entry.totpDigits ?? null,
-      totpPeriod: entry.totpPeriod ?? null,
-      totpAlgorithm: entry.totpAlgorithm ?? null,
-    };
-    this.totpInput = entry.totp ?? '';
+  protected async startEdit(entry: SecretEntry): Promise<void> {
+    this.error.set(null);
+    let fields: SecretFields;
+    try {
+      // Editing is the one place that needs all of it at once.
+      fields = await this.store.fields(entry.id);
+    } catch {
+      this.error.set(this.i18n.t('secrets.openFailed'));
+      return;
+    }
+    this.form = { ...fields, attachments: [], groupId: this.groupOf(entry) };
+    this.totpInput = fields.totp ?? '';
     this.totpError.set(null);
     this.totpAccepted.set(null);
-    this.formAttachments.set([...(entry.attachments ?? [])]);
+    this.formAttachments.set([...fields.attachments]);
     this.editingId.set(entry.id);
     this.formOpen.set(true);
+  }
+
+  /**
+   * The sealed half of a row, once it has been opened. Returns null the first
+   * time and fills in a moment later, which re-renders whatever asked.
+   */
+  protected secretsOf(entry: SecretEntry): SecretSecrets | null {
+    const known = this.opened().get(entry.id);
+    if (known) {
+      return known;
+    }
+    if (!this.opening.has(entry.id)) {
+      this.opening.add(entry.id);
+      void this.store
+        .open(entry.id)
+        .then((secrets) => {
+          this.opened.update((map) => new Map(map).set(entry.id, secrets));
+        })
+        .catch(() => this.error.set(this.i18n.t('secrets.openFailed')))
+        .finally(() => this.opening.delete(entry.id));
+    }
+    return null;
   }
 
   protected cancel(): void {
@@ -513,10 +585,13 @@ export class Secrets {
     this.formAttachments.update((list) => list.filter((_, i) => i !== index));
   }
 
-  protected toggleNotes(id: string): void {
+  protected async toggleNotes(entry: SecretEntry): Promise<void> {
+    if (!this.notesRevealed().has(entry.id)) {
+      await this.openInto(entry);
+    }
     this.notesRevealed.update((set) => {
       const next = new Set(set);
-      next.has(id) ? next.delete(id) : next.add(id);
+      next.has(entry.id) ? next.delete(entry.id) : next.add(entry.id);
       return next;
     });
   }
@@ -557,12 +632,32 @@ export class Secrets {
     }
   }
 
-  protected toggleReveal(id: string): void {
+  protected async toggleReveal(entry: SecretEntry): Promise<void> {
+    if (!this.revealed().has(entry.id)) {
+      await this.openInto(entry);
+    }
     this.revealed.update((set) => {
       const next = new Set(set);
-      next.has(id) ? next.delete(id) : next.add(id);
+      next.has(entry.id) ? next.delete(entry.id) : next.add(entry.id);
       return next;
     });
+  }
+
+  /** Opens an entry and waits, for the paths that need it there and then. */
+  private async openInto(entry: SecretEntry): Promise<SecretSecrets | null> {
+    const known = this.opened().get(entry.id);
+    if (known) {
+      return known;
+    }
+    this.error.set(null);
+    try {
+      const secrets = await this.store.open(entry.id);
+      this.opened.update((map) => new Map(map).set(entry.id, secrets));
+      return secrets;
+    } catch {
+      this.error.set(this.i18n.t('secrets.openFailed'));
+      return null;
+    }
   }
 
   protected isRevealed(id: string): boolean {
@@ -581,7 +676,10 @@ export class Secrets {
   // --- Two-factor codes ------------------------------------------------------
 
   protected codeOf(entry: SecretEntry): string {
-    return this.totp.liveCode(entry.id, entry);
+    // A row with a code has to be opened to make one; that is a handful of
+    // entries, not the whole vault.
+    const secrets = this.secretsOf(entry);
+    return secrets ? this.totp.liveCode(entry.id, secrets) : '······';
   }
 
   /** The live code for whatever is in the form right now, before saving. */
@@ -594,14 +692,16 @@ export class Secrets {
   }
 
   protected secondsLeft(entry: SecretEntry): number {
-    return this.totp.secondsLeft(entry);
+    const secrets = this.secretsOf(entry);
+    return secrets ? this.totp.secondsLeft(secrets) : 0;
   }
 
   /** Copies the code itself, without the space that makes it readable. */
   protected async copyCode(entry: SecretEntry): Promise<void> {
     this.error.set(null);
     try {
-      const code = await this.totp.codeFor(entry);
+      const secrets = await this.openInto(entry);
+      const code = secrets ? await this.totp.codeFor(secrets) : null;
       if (!code) {
         return;
       }
@@ -629,8 +729,12 @@ export class Secrets {
   protected async copyPassword(entry: SecretEntry): Promise<void> {
     this.error.set(null);
     try {
+      const secrets = await this.openInto(entry);
+      if (!secrets) {
+        return;
+      }
       await this.clipboard.copyEphemeral(
-        entry.password,
+        secrets.password,
         `${this.i18n.t('secrets.field.password')} · ${entry.title}`,
       );
     } catch {

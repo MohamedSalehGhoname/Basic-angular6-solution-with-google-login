@@ -29,6 +29,32 @@
   </label>
 </section>
 
+@if (secrets.legacyCount() > 0 || sealed() !== null) {
+  <section class="card">
+    <h2>{{ i18n.t('settings.seal.title') }}</h2>
+    <p class="muted">{{ i18n.t('settings.seal.intro') }}</p>
+    @if (sealed(); as done) {
+      <p class="ok">{{ i18n.t('settings.seal.done', { n: done }) }}</p>
+    } @else {
+      <p>{{ i18n.t('settings.seal.pending', { n: secrets.legacyCount() }) }}</p>
+    }
+    @if (sealing(); as progress) {
+      <progress [value]="progress.done" [max]="progress.total || 1"></progress>
+      <p class="muted">
+        {{ i18n.t('secrets.import.progress', { done: progress.done, total: progress.total }) }}
+      </p>
+    }
+    @if (sealError(); as message) {
+      <p class="error" role="alert">{{ message }}</p>
+    }
+    @if (secrets.legacyCount() > 0) {
+      <button type="button" (click)="sealOldEntries()" [disabled]="!!sealing()">
+        {{ i18n.t('settings.seal.run') }}
+      </button>
+    }
+  </section>
+}
+
 @if (biometric.available()) {
   <section class="card">
     <h2>{{ i18n.t('biometric.title') }}</h2>

@@ -90,7 +90,9 @@ describe('GroupsStore', () => {
     await secrets.move(entry.id, tools.id);
     const moved = secrets.items().find((item) => item.id === entry.id)!;
     expect(moved.groupId).toBe(tools.id);
-    expect(moved).toMatchObject({ title: 'Router', username: 'admin', password: 'pw', notes: 'n' });
+    expect(moved).toMatchObject({ title: 'Router', username: 'admin' });
+    // The sealed half travelled untouched: moving is not opening.
+    expect(await secrets.open(moved.id)).toMatchObject({ password: 'pw', notes: 'n' });
     expect(moved.createdAt).toBe(entry.createdAt);
   });
 });
