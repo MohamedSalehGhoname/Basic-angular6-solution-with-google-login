@@ -121,6 +121,8 @@ export const TRANSLATIONS = {
     'secrets.newGroup': 'New group',
     'secrets.newGroupHint': 'Create a group inside the selected one',
     'secrets.editGroup': 'Edit group',
+    'secrets.deleteGroup': 'Delete group',
+    'secrets.pickGroupFirst': 'Select a group first — the top level is not one.',
     'secrets.groupName': 'Name',
     'secrets.groupParent': 'Inside',
     'secrets.groupIcon': 'Icon',
@@ -147,6 +149,22 @@ export const TRANSLATIONS = {
     'codes.emptyHint':
       'Add a key to a password in Secrets — scan the QR code the site shows — and its codes appear here.',
     'codes.emptyAction': 'Go to Secrets',
+    'codes.import.button': 'Import from Authenticator',
+    'codes.import.title': 'Import from Google Authenticator',
+    'codes.import.found': 'Read {n} account(s) so far.',
+    'codes.import.more':
+      '{n} more QR code(s) to scan — Authenticator splits a long list over several.',
+    'codes.import.scanNext': 'Scan the next code',
+    'codes.import.hotp':
+      '{n} counter-based account(s) cannot be moved and are left in Authenticator.',
+    'codes.import.already': 'already here',
+    'codes.import.safe':
+      'Read on this device and encrypted like everything else here. Authenticator keeps its own copy: nothing is removed from it.',
+    'codes.import.run': 'Add them',
+    'codes.import.done': 'Added {n} code(s). {d} were already here.',
+    'codes.import.notExport':
+      'That is not an Authenticator export code. In Authenticator: Transfer accounts ▸ Export accounts.',
+    'codes.import.scanFailed': 'The scan did not work. Try again.',
     'secrets.title': 'Secrets',
     'secrets.add': 'Add secret',
     'secrets.copiedLabel': 'Copied {label} — clipboard clears in {n}s.',
@@ -409,6 +427,8 @@ export const TRANSLATIONS = {
     'secrets.newGroup': 'مجموعة جديدة',
     'secrets.newGroupHint': 'إنشاء مجموعة داخل المجموعة المحددة',
     'secrets.editGroup': 'تعديل المجموعة',
+    'secrets.deleteGroup': 'حذف المجموعة',
+    'secrets.pickGroupFirst': 'اختر مجموعة أولًا — المستوى الأعلى ليس مجموعة.',
     'secrets.groupName': 'الاسم',
     'secrets.groupParent': 'داخل',
     'secrets.groupIcon': 'الأيقونة',
@@ -435,6 +455,20 @@ export const TRANSLATIONS = {
     'codes.emptyHint':
       'أضف مفتاحًا لكلمة مرور من صفحة الأسرار — امسح رمز QR الذي يعرضه الموقع — وتظهر أكواده هنا.',
     'codes.emptyAction': 'اذهب إلى الأسرار',
+    'codes.import.button': 'استيراد من Authenticator',
+    'codes.import.title': 'استيراد من Google Authenticator',
+    'codes.import.found': 'تمت قراءة {n} حساب حتى الآن.',
+    'codes.import.more': 'باقي {n} رمز QR للمسح — التطبيق يقسّم القائمة الطويلة على أكثر من رمز.',
+    'codes.import.scanNext': 'امسح الرمز التالي',
+    'codes.import.hotp': '{n} حساب بعدّاد لا يمكن نقله، وسيبقى في Authenticator.',
+    'codes.import.already': 'موجود عندك',
+    'codes.import.safe':
+      'تُقرأ على هذا الجهاز وتُشفَّر مثل كل شيء هنا. و Authenticator يحتفظ بنسخته: لا يُحذف منه شيء.',
+    'codes.import.run': 'أضفها',
+    'codes.import.done': 'تمت إضافة {n} كود. {d} كانت موجودة بالفعل.',
+    'codes.import.notExport':
+      'هذا ليس رمز تصدير من Authenticator. من التطبيق: نقل الحسابات ▸ تصدير الحسابات.',
+    'codes.import.scanFailed': 'لم ينجح المسح. حاول مرة أخرى.',
     'secrets.title': 'الأسرار',
     'secrets.add': 'إضافة سر',
     'secrets.copiedLabel': 'تم نسخ {label} — تُمسح الحافظة خلال {n} ث.',

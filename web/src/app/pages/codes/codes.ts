@@ -1,10 +1,17 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import {
+  type MigrationAccount,
+  accountTitle,
+  parseMigration,
+} from '../../core/authenticator-import';
 import { ClipboardCopyService } from '../../core/clipboard-copy.service';
 import { GroupsStore } from '../../core/groups-store';
 import { I18nService } from '../../core/i18n/i18n.service';
+import { QrScannerService } from '../../core/qr-scanner.service';
 import { SecretsStore, type SecretEntry } from '../../core/secrets-store';
+import { TOTP_DEFAULTS, parseTotp } from '../../core/totp';
 import { TotpService } from '../../core/totp.service';
 
 /** How long a row stays marked as copied. */
@@ -28,6 +35,7 @@ export class Codes {
   private readonly totp = inject(TotpService);
   protected readonly clipboard = inject(ClipboardCopyService);
   protected readonly i18n = inject(I18nService);
+  protected readonly qr = inject(QrScannerService);
 
   protected readonly loading = signal(true);
   protected readonly error = signal<string | null>(null);
@@ -66,6 +74,138 @@ export class Codes {
       this.loading.set(false);
     }
   }
+
+  // --- Import from Google Authenticator --------------------------------------
+  // Its export is a set of QR codes rather than one, so the scanner is opened
+  // again until every code in the set has been read, and what they hold is
+  // gathered up before anything is written to the vault.
+
+  protected readonly scanning = signal(false);
+  protected readonly scanned = signal<MigrationAccount[]>([]);
+  /** How many QR codes the export said it has, and which ones were read. */
+  protected readonly batchCount = signal(1);
+  private readonly batchesSeen = signal<Set<number>>(new Set());
+  /**
+   * Counter-based accounts per QR code. Kept per code rather than added up as
+   * they arrive: scanning the same code twice is easy to do and used to count
+   * its skipped accounts twice over.
+   */
+  private readonly hotpByBatch = signal<Map<number, number>>(new Map());
+  protected readonly hotpSkipped = computed(() =>
+    [...this.hotpByBatch().values()].reduce((total, n) => total + n, 0),
+  );
+  protected readonly importing = signal(false);
+  protected readonly importResult = signal<{ added: number; existing: number } | null>(null);
+
+  protected readonly batchesLeft = computed(() => this.batchCount() - this.batchesSeen().size);
+
+  /** Accounts whose key is already in the vault, so they are not added twice. */
+  private readonly knownSecrets = computed(
+    () => new Set(this.store.items().map((entry) => entry.totp ?? '')),
+  );
+
+  protected alreadyHave(account: MigrationAccount): boolean {
+    return this.knownSecrets().has(account.secret);
+  }
+
+  protected title(account: MigrationAccount): string {
+    return accountTitle(account);
+  }
+
+  protected async scanExport(): Promise<void> {
+    this.error.set(null);
+    this.importResult.set(null);
+    this.scanning.set(true);
+    try {
+      const value = await this.qr.scan();
+      if (value === null) {
+        return;
+      }
+      this.readScan(value);
+    } catch {
+      this.error.set(this.i18n.t('codes.import.scanFailed'));
+    } finally {
+      this.scanning.set(false);
+    }
+  }
+
+  /** Takes an export code, or a single otpauth:// link scanned by mistake. */
+  private readScan(value: string): void {
+    let accounts: MigrationAccount[];
+    try {
+      const batch = parseMigration(value);
+      accounts = batch.accounts;
+      this.batchCount.set(batch.count);
+      this.batchesSeen.update((seen) => new Set(seen).add(batch.index));
+      this.hotpByBatch.update((counts) => new Map(counts).set(batch.index, batch.hotpSkipped));
+    } catch {
+      const single = parseTotp(value);
+      if (!single) {
+        this.error.set(this.i18n.t('codes.import.notExport'));
+        return;
+      }
+      accounts = [{ ...single, label: single.label ?? '', issuer: single.issuer ?? '' }];
+      this.batchesSeen.update((seen) => new Set(seen).add(1));
+    }
+    // Scanning the same code twice should not list everything twice.
+    this.scanned.update((list) => {
+      const bySecret = new Map(list.map((account) => [account.secret, account]));
+      for (const account of accounts) {
+        bySecret.set(account.secret, account);
+      }
+      return [...bySecret.values()];
+    });
+  }
+
+  protected cancelImport(): void {
+    this.scanned.set([]);
+    this.batchCount.set(1);
+    this.batchesSeen.set(new Set());
+    this.hotpByBatch.set(new Map());
+  }
+
+  /** Writes what was scanned into the vault, one entry per account. */
+  protected async runImport(): Promise<void> {
+    if (this.importing()) {
+      return;
+    }
+    this.importing.set(true);
+    this.error.set(null);
+    let added = 0;
+    let existing = 0;
+    try {
+      for (const account of this.scanned()) {
+        if (this.alreadyHave(account)) {
+          existing += 1;
+          continue;
+        }
+        await this.store.add({
+          title: accountTitle(account),
+          username: account.label.includes(':')
+            ? account.label.slice(account.label.indexOf(':') + 1).trim()
+            : account.label,
+          password: '',
+          url: '',
+          notes: '',
+          attachments: [],
+          groupId: null,
+          totp: account.secret,
+          totpDigits: account.digits === TOTP_DEFAULTS.digits ? null : account.digits,
+          totpPeriod: account.period === TOTP_DEFAULTS.period ? null : account.period,
+          totpAlgorithm: account.algorithm === TOTP_DEFAULTS.algorithm ? null : account.algorithm,
+        });
+        added += 1;
+      }
+      this.importResult.set({ added, existing });
+      this.cancelImport();
+    } catch (err) {
+      this.error.set(err instanceof Error ? err.message : 'Could not import the codes.');
+    } finally {
+      this.importing.set(false);
+    }
+  }
+
+  // --- Codes on screen -------------------------------------------------------
 
   protected codeOf(entry: SecretEntry): string {
     return this.totp.liveCode(entry.id, entry);

@@ -1,7 +1,62 @@
 <div class="page-head">
   <h1>{{ i18n.t('codes.title') }}</h1>
-  <a class="link" routerLink="/secrets">{{ i18n.t('codes.manage') }}</a>
+  <div class="head-actions">
+    @if (qr.supported()) {
+      <button type="button" class="ghost" (click)="scanExport()" [disabled]="scanning()">
+        {{ scanning() ? i18n.t('secrets.totpScanning') : i18n.t('codes.import.button') }}
+      </button>
+    }
+    <a class="link" routerLink="/secrets">{{ i18n.t('codes.manage') }}</a>
+  </div>
 </div>
+
+@if (scanned().length > 0) {
+  <div class="import-card" role="dialog" [attr.aria-label]="i18n.t('codes.import.title')">
+    <h2>{{ i18n.t('codes.import.title') }}</h2>
+    <p>{{ i18n.t('codes.import.found', { n: scanned().length }) }}</p>
+    @if (batchesLeft() > 0) {
+      <!-- Authenticator splits a long list over several codes; the export
+           itself says how many, so the user is told what is still missing. -->
+      <p class="warn">{{ i18n.t('codes.import.more', { n: batchesLeft() }) }}</p>
+    }
+    @if (hotpSkipped() > 0) {
+      <p class="muted">{{ i18n.t('codes.import.hotp', { n: hotpSkipped() }) }}</p>
+    }
+    <ul class="scanned">
+      @for (account of scanned(); track account.secret) {
+        <li>
+          <span class="scanned-title">{{ title(account) }}</span>
+          @if (alreadyHave(account)) {
+            <span class="muted">{{ i18n.t('codes.import.already') }}</span>
+          }
+        </li>
+      }
+    </ul>
+    <p class="muted">{{ i18n.t('codes.import.safe') }}</p>
+    <div class="form-actions">
+      <button type="button" class="ghost" (click)="cancelImport()" [disabled]="importing()">
+        {{ i18n.t('secrets.cancel') }}
+      </button>
+      @if (batchesLeft() > 0) {
+        <button type="button" class="ghost" (click)="scanExport()" [disabled]="scanning()">
+          {{ i18n.t('codes.import.scanNext') }}
+        </button>
+      }
+      <button type="button" (click)="runImport()" [disabled]="importing()">
+        {{ importing() ? i18n.t('secrets.import.run') : i18n.t('codes.import.run') }}
+      </button>
+    </div>
+  </div>
+}
+
+@if (importResult(); as result) {
+  <p class="done" role="status">
+    {{ i18n.t('codes.import.done', { n: result.added, d: result.existing }) }}
+    <button type="button" class="link" (click)="importResult.set(null)">
+      {{ i18n.t('files.dismiss') }}
+    </button>
+  </p>
+}
 
 @if (clipboard.secondsLeft() > 0) {
   <p class="clearing" role="status">
