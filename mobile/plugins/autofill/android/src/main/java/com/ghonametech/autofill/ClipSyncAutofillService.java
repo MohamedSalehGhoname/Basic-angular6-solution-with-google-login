@@ -4,21 +4,30 @@ import android.app.PendingIntent;
 import android.app.assist.AssistStructure;
 import android.content.Intent;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.CancellationSignal;
 import android.service.autofill.AutofillService;
 import android.service.autofill.Dataset;
+import android.service.autofill.Field;
 import android.service.autofill.FillCallback;
 import android.service.autofill.FillRequest;
 import android.service.autofill.FillResponse;
+import android.service.autofill.InlinePresentation;
+import android.service.autofill.Presentations;
 import android.service.autofill.SaveCallback;
 import android.service.autofill.SaveInfo;
 import android.service.autofill.SaveRequest;
 import android.view.autofill.AutofillId;
 import android.view.autofill.AutofillValue;
+import android.view.inputmethod.InlineSuggestionsRequest;
 import android.widget.RemoteViews;
+import android.widget.inline.InlinePresentationSpec;
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
+import androidx.autofill.inline.UiVersions;
+import androidx.autofill.inline.v1.InlineSuggestionUi;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * Offers the user's saved passwords to any app or web page that asks Android
@@ -36,6 +45,9 @@ public class ClipSyncAutofillService extends AutofillService {
 
     private static final int FILL_REQUEST_CODE = 1001;
     private static final int SAVE_REQUEST_CODE = 1002;
+
+    /** Keeps the offer listed whatever the user has typed so far. */
+    private static final Pattern MATCH_ANYTHING = Pattern.compile(".*", Pattern.DOTALL);
 
     @Override
     public void onFillRequest(
@@ -67,15 +79,17 @@ public class ClipSyncAutofillService extends AutofillService {
         );
 
         RemoteViews presentation = suggestion(getString(R.string.autofill_unlock_to_fill));
-        Dataset.Builder dataset = new Dataset.Builder(presentation);
+        InlinePresentation inline = inlineSuggestion(request, pending);
+
+        Dataset.Builder dataset = newDataset(presentation);
         dataset.setAuthentication(pending.getIntentSender());
-        // Every field the dataset claims must carry a value, even a null one:
+        // Every field the dataset claims must be listed, even with no value:
         // the real values arrive after authentication.
         for (AutofillId id : fields.usernameIds) {
-            dataset.setValue(id, null, presentation);
+            addField(dataset, id, presentation, inline);
         }
         for (AutofillId id : fields.passwordIds) {
-            dataset.setValue(id, null, presentation);
+            addField(dataset, id, presentation, inline);
         }
 
         FillResponse.Builder response = new FillResponse.Builder();
@@ -148,6 +162,94 @@ public class ClipSyncAutofillService extends AutofillService {
      */
     private boolean isOurOwnScreen(FillRequestFields fields) {
         return getPackageName().equals(fields.packageName);
+    }
+
+    /**
+     * A suggestion drawn inside the keyboard's own suggestion strip, when the
+     * keyboard offers to host one (Android 11 and later).
+     *
+     * This is not only nicer to look at. The floating window Android puts up
+     * otherwise takes the input focus, so the first key the user pressed
+     * dismissed it, focus went back to the app with no editor attached yet,
+     * and the system hid the keyboard — the user typed one letter and the
+     * keyboard shut. Inside the strip there is no extra window and nothing to
+     * lose focus to.
+     */
+    private InlinePresentation inlineSuggestion(FillRequest request, PendingIntent pending) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            return null;
+        }
+        InlineSuggestionsRequest inlineRequest = request.getInlineSuggestionsRequest();
+        if (inlineRequest == null || inlineRequest.getMaxSuggestionCount() <= 0) {
+            return null;
+        }
+        List<InlinePresentationSpec> specs = inlineRequest.getInlinePresentationSpecs();
+        if (specs == null || specs.isEmpty()) {
+            return null;
+        }
+        InlinePresentationSpec spec = specs.get(0);
+        Bundle style = spec.getStyle();
+        if (style == null || !UiVersions.getVersions(style).contains(UiVersions.INLINE_UI_VERSION_1)) {
+            // A keyboard whose strip we do not know how to draw in.
+            return null;
+        }
+        try {
+            return new InlinePresentation(
+                InlineSuggestionUi
+                    .newContentBuilder(pending)
+                    .setTitle(getString(R.string.autofill_inline_title))
+                    .setSubtitle(getString(R.string.autofill_inline_subtitle))
+                    .build()
+                    .getSlice(),
+                spec,
+                /* pinned= */ false
+            );
+        } catch (RuntimeException e) {
+            // Never let a presentation problem cost the user their suggestion.
+            return null;
+        }
+    }
+
+    private Dataset.Builder newDataset(RemoteViews presentation) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // Each field carries its own presentation on this version.
+            return new Dataset.Builder();
+        }
+        return new Dataset.Builder(presentation);
+    }
+
+    /**
+     * Adds one field to the dataset, keeping the suggestion on screen while
+     * the user types: without a filter Android hides a dataset that has no
+     * value to match against, so the offer vanished on the first keystroke and
+     * only came back by leaving the field and returning to it.
+     */
+    private void addField(
+        Dataset.Builder dataset,
+        AutofillId id,
+        RemoteViews presentation,
+        InlinePresentation inline
+    ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Presentations.Builder presentations = new Presentations.Builder()
+                .setMenuPresentation(presentation);
+            if (inline != null) {
+                presentations.setInlinePresentation(inline);
+            }
+            dataset.setField(
+                id,
+                new Field.Builder()
+                    .setPresentations(presentations.build())
+                    .setFilter(MATCH_ANYTHING)
+                    .build()
+            );
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && inline != null) {
+            dataset.setValue(id, null, presentation, inline);
+            return;
+        }
+        dataset.setValue(id, null, MATCH_ANYTHING, presentation);
     }
 
     private AutofillId[] ids(List<AutofillId> from) {

@@ -3,4 +3,7 @@
     <string name="autofill_service_label">GhoClipboard</string>
     <string name="autofill_service_summary">Fills your saved passwords after a fingerprint check. Nothing is decrypted until you choose an entry.</string>
     <string name="autofill_unlock_to_fill">GhoClipboard — unlock to fill</string>
+    <!-- The keyboard strip is narrow, so the name and the action are split. -->
+    <string name="autofill_inline_title">GhoClipboard</string>
+    <string name="autofill_inline_subtitle">unlock to fill</string>
 </resources>
