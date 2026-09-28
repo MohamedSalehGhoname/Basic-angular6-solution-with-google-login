@@ -38,7 +38,13 @@ interface SecretPayload extends SecretFields {
 
 export type SecretEntry = Entry<SecretPayload>;
 
-const MAX_SECRETS = 1000;
+/**
+ * The same ceiling the server enforces for this collection. It has to be the
+ * same number: a lower one here makes the client quietly drop entries the
+ * server happily stored, which is how an import of a thousand passwords ended
+ * up showing only some of them.
+ */
+const MAX_SECRETS = 5000;
 
 /**
  * KeePass-style secrets: deliberate, structured, editable entries in the same
@@ -54,6 +60,11 @@ export class SecretsStore extends SyncedCollection<SecretPayload> {
   async add(fields: SecretFields): Promise<SecretEntry | null> {
     if (!fields.title.trim()) {
       return null;
+    }
+    // Refuse rather than silently push the last entry out of the list: losing
+    // a password without being told is worse than being unable to add one.
+    if (this.items().length >= MAX_SECRETS) {
+      throw new Error(`This vault is full: it holds the maximum of ${MAX_SECRETS} passwords.`);
     }
     const now = Date.now();
     return this.create({ ...this.normalize(fields), createdAt: now, updatedAt: now });

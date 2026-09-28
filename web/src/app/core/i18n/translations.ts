@@ -88,6 +88,8 @@ export const TRANSLATIONS = {
     'ttl.1w': '1 week',
     'ttl.forever': 'Forever',
 
+    'secrets.mirrorFull':
+      'This device has run out of room for its offline copy. Your passwords are safe and in sync, but this device may need to be online to show them all.',
     'secrets.import.button': 'Import passwords',
     'secrets.import.hint':
       'From Chrome: Settings ▸ Autofill ▸ Google Password Manager ▸ Settings ▸ Export passwords. From KeePass: File ▸ Export ▸ KeePass XML (2.x). Then choose that file here.',
@@ -377,6 +379,8 @@ export const TRANSLATIONS = {
     'ttl.1w': 'أسبوع',
     'ttl.forever': 'للأبد',
 
+    'secrets.mirrorFull':
+      'مساحة النسخة المحلية على هذا الجهاز خلصت. كلمات سرك محفوظة ومتزامنة، لكن قد يحتاج هذا الجهاز للاتصال بالإنترنت ليعرضها كلها.',
     'secrets.import.button': 'استيراد كلمات السر',
     'secrets.import.hint':
       'من كروم: الإعدادات ▸ الملء التلقائي ▸ مدير كلمات السر ▸ الإعدادات ▸ تصدير كلمات السر. ومن KeePass: File ▸ Export ▸ KeePass XML (2.x). ثم اختر الملف هنا.',

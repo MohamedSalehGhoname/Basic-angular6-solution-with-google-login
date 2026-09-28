@@ -94,6 +94,38 @@ describe('SecretsStore', () => {
     expect(cleared.totpDigits).toBeNull();
   });
 
+  it('keeps every entry of a large import instead of dropping the overflow', async () => {
+    // A browser export of a thousand passwords used to come out short: the
+    // client's own ceiling was below the server's, and each entry past it
+    // pushed another one out of the list without a word.
+    for (let i = 0; i < 1100; i++) {
+      await store.add(fields({ title: `Entry ${String(i).padStart(4, '0')}` }));
+    }
+    expect(store.items().length).toBe(1100);
+    expect(store.items()[0].title).toBe('Entry 0000');
+    expect(store.items().at(-1)!.title).toBe('Entry 1099');
+    // Each one reached the server too, not just the list on screen.
+    expect(syncApi.collections.get('secrets')!.size).toBe(1100);
+  }, 120_000);
+
+  it('carries on when the device has no room for the offline copy', async () => {
+    const setItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = () => {
+      throw new DOMException('full', 'QuotaExceededError');
+    };
+    try {
+      const entry = await store.add(fields({ title: 'Saved anyway' }));
+      // On screen and on its way to the server, with the device saying why
+      // its offline copy is behind.
+      expect(entry).not.toBeNull();
+      expect(store.items()[0].title).toBe('Saved anyway');
+      expect(store.mirrorFull()).toBe(true);
+    } finally {
+      Storage.prototype.setItem = setItem;
+    }
+    await waitFor(() => (syncApi.collections.get('secrets')?.size ?? 0) === 1);
+  });
+
   it('requires a title', async () => {
     expect(await store.add(fields({ title: '   ' }))).toBeNull();
     expect(store.items()).toEqual([]);

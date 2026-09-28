@@ -46,6 +46,14 @@ export abstract class SyncedCollection<T extends object> {
   /** Live connectivity to the sync server. */
   readonly online = this._online.asReadonly();
 
+  private readonly _mirrorFull = signal(false);
+  /**
+   * True once this device ran out of room for its offline copy. Everything is
+   * still on the server and on screen — only the copy that survives being
+   * offline is short — so this is a warning, never a reason to stop.
+   */
+  readonly mirrorFull = this._mirrorFull.asReadonly();
+
   private loadedUid: string | null = null;
   private disconnect: (() => void) | null = null;
 
@@ -338,9 +346,7 @@ export abstract class SyncedCollection<T extends object> {
             ...stored.items.filter((item) => item.id !== entry.id),
           ].slice(0, this.maxItems);
           this.writeStored(uid, stored);
-          this._items.update((items) =>
-            this.sorted([entry, ...items]).slice(0, this.maxItems),
-          );
+          this._items.update((items) => this.sorted([entry, ...items]).slice(0, this.maxItems));
         } catch {
           this._skipped.update((count) => count + 1);
         }
@@ -372,9 +378,7 @@ export abstract class SyncedCollection<T extends object> {
       stored.items = stored.items.map((item) => (item.id === id ? { id, blob } : item));
       this.writeStored(uid, stored);
       this._items.update((items) =>
-        this.sorted(
-          items.map((item) => (item.id === id ? { ...payload, id } : item)),
-        ),
+        this.sorted(items.map((item) => (item.id === id ? { ...payload, id } : item))),
       );
     } catch {
       // Leave the existing entry in place if the update cannot be decrypted.
@@ -445,6 +449,15 @@ export abstract class SyncedCollection<T extends object> {
   }
 
   private writeStored(uid: string, list: StoredList): void {
-    localStorage.setItem(this.storageKey(uid), JSON.stringify(list));
+    try {
+      localStorage.setItem(this.storageKey(uid), JSON.stringify(list));
+      this._mirrorFull.set(false);
+    } catch {
+      // Out of browser storage (a big vault, or images attached to entries).
+      // Failing here would lose the item the caller is in the middle of
+      // saving, and it is the server copy that matters, so carry on and say
+      // so instead.
+      this._mirrorFull.set(true);
+    }
   }
 }
