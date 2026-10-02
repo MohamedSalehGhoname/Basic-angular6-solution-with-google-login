@@ -22,6 +22,23 @@ export interface ItemRecord {
 }
 
 /**
+ * A link that lets somebody without an account fetch one file's ciphertext.
+ * The key to read it never reaches here: it travels in the link's fragment,
+ * which browsers do not send to servers. Nor does the file's name — so a
+ * share row says who may be billed for the bytes and when to stop serving
+ * them, and nothing about what the file is.
+ */
+export interface ShareRecord {
+  token: string;
+  fileId: string;
+  uid: string;
+  createdAt: number;
+  expiresAt: number;
+  maxDownloads: number;
+  downloads: number;
+}
+
+/**
  * All values stored here are either identifiers or ciphertext produced by
  * the client; the server never holds plaintext or key material.
  */
@@ -58,6 +75,17 @@ export class SyncDb {
         size_bytes INTEGER NOT NULL,
         created_at INTEGER NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS shares (
+        token         TEXT PRIMARY KEY,
+        file_id       TEXT NOT NULL,
+        uid           TEXT NOT NULL,
+        created_at    INTEGER NOT NULL,
+        expires_at    INTEGER NOT NULL,
+        max_downloads INTEGER NOT NULL,
+        downloads     INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE INDEX IF NOT EXISTS shares_by_owner ON shares (uid, created_at DESC);
+      CREATE INDEX IF NOT EXISTS shares_by_file ON shares (file_id);
     `);
     // Databases created before the key check gain the column here.
     this.addColumnIfMissing('vaults', 'key_check');
@@ -76,6 +104,117 @@ export class SyncDb {
     this.db
       .prepare('INSERT INTO files (file_id, uid, size_bytes, created_at) VALUES (?, ?, ?, ?)')
       .run(fileId, uid, sizeBytes, Date.now());
+  }
+
+  // --- Public share links ---------------------------------------------------
+
+  createShare(share: ShareRecord): void {
+    this.db
+      .prepare(
+        `INSERT INTO shares (token, file_id, uid, created_at, expires_at, max_downloads, downloads)
+         VALUES (?, ?, ?, ?, ?, ?, 0)`,
+      )
+      .run(
+        share.token,
+        share.fileId,
+        share.uid,
+        share.createdAt,
+        share.expiresAt,
+        share.maxDownloads,
+      );
+  }
+
+  /** A live share, or null when it never existed, expired or ran out. */
+  getShare(token: string, now: number = Date.now()): ShareRecord | null {
+    const row = this.db
+      .prepare(
+        `SELECT token, file_id, uid, created_at, expires_at, max_downloads, downloads
+           FROM shares WHERE token = ?`,
+      )
+      .get(token) as
+      | {
+          token: string;
+          file_id: string;
+          uid: string;
+          created_at: number;
+          expires_at: number;
+          max_downloads: number;
+          downloads: number;
+        }
+      | undefined;
+    if (!row || row.expires_at <= now || row.downloads >= row.max_downloads) {
+      return null;
+    }
+    return {
+      token: row.token,
+      fileId: row.file_id,
+      uid: row.uid,
+      createdAt: row.created_at,
+      expiresAt: row.expires_at,
+      maxDownloads: row.max_downloads,
+      downloads: row.downloads,
+    };
+  }
+
+  /**
+   * Counts one download, refusing when the share has run out. Done as one
+   * statement so two downloads at once cannot both pass the last slot.
+   */
+  countDownload(token: string, now: number = Date.now()): boolean {
+    const result = this.db
+      .prepare(
+        `UPDATE shares SET downloads = downloads + 1
+          WHERE token = ? AND expires_at > ? AND downloads < max_downloads`,
+      )
+      .run(token, now);
+    return result.changes > 0;
+  }
+
+  listShares(uid: string, now: number = Date.now()): ShareRecord[] {
+    return (
+      this.db
+        .prepare(
+          `SELECT token, file_id, uid, created_at, expires_at, max_downloads, downloads
+             FROM shares WHERE uid = ? AND expires_at > ? ORDER BY created_at DESC`,
+        )
+        .all(uid, now) as {
+        token: string;
+        file_id: string;
+        uid: string;
+        created_at: number;
+        expires_at: number;
+        max_downloads: number;
+        downloads: number;
+      }[]
+    ).map((row) => ({
+      token: row.token,
+      fileId: row.file_id,
+      uid: row.uid,
+      createdAt: row.created_at,
+      expiresAt: row.expires_at,
+      maxDownloads: row.max_downloads,
+      downloads: row.downloads,
+    }));
+  }
+
+  /** Revokes one link; only its owner may. */
+  deleteShare(uid: string, token: string): boolean {
+    return (
+      this.db.prepare('DELETE FROM shares WHERE uid = ? AND token = ?').run(uid, token).changes > 0
+    );
+  }
+
+  /** Revokes every link to a file, for when the file itself goes away. */
+  deleteSharesForFile(fileId: string): number {
+    return this.db.prepare('DELETE FROM shares WHERE file_id = ?').run(fileId).changes;
+  }
+
+  /** The stored size, for telling a recipient what they are about to fetch. */
+  fileSize(fileId: string): number {
+    const row = this.db.prepare('SELECT size_bytes FROM files WHERE file_id = ?').get(fileId) as
+      | { size_bytes: number }
+      | undefined;
+    return row?.size_bytes ?? 0;
   }
 
   fileOwner(fileId: string): string | null {

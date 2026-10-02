@@ -55,6 +55,39 @@
   </section>
 }
 
+<section class="card">
+  <h2>{{ i18n.t('files.links.title') }}</h2>
+  <p class="muted">{{ i18n.t('files.links.intro') }}</p>
+  @if (linkRevoked()) {
+    <p class="ok">{{ i18n.t('files.links.revoked') }}</p>
+  }
+  @if (linksError(); as message) {
+    <p class="error" role="alert">{{ message }}</p>
+  }
+  @if (links.links().length === 0) {
+    <p class="muted">{{ i18n.t('files.links.none') }}</p>
+  } @else {
+    <ul class="links">
+      @for (link of links.links(); track link.token) {
+        <li>
+          <span class="muted">
+            {{
+              i18n.t('files.links.row', {
+                n: link.downloads,
+                max: link.maxDownloads,
+                h: hoursLeft(link.expiresAt),
+              })
+            }}
+          </span>
+          <button type="button" class="ghost danger" (click)="revokeLink(link.token)">
+            {{ i18n.t('files.links.revoke') }}
+          </button>
+        </li>
+      }
+    </ul>
+  }
+</section>
+
 @if (biometric.available()) {
   <section class="card">
     <h2>{{ i18n.t('biometric.title') }}</h2>

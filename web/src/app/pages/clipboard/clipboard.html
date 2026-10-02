@@ -113,6 +113,15 @@
   @if (filtered().length === 0) {
     <p class="muted">{{ i18n.t('clipboard.noMatch', { q: search() }) }}</p>
   }
+  @if (linkNotice(); as notice) {
+    <p class="link-notice" role="status">
+      {{ notice }}
+      <button type="button" class="link" (click)="linkNotice.set(null)">
+        {{ i18n.t('files.dismiss') }}
+      </button>
+    </p>
+  }
+
   <ul class="items">
     @for (item of filtered(); track item.id) {
       <li>
@@ -124,6 +133,9 @@
               <span class="file-size">{{ formatSize(file.size) }}</span>
               @if (file.key) {
                 <span class="badge">🔒 {{ i18n.t('clipboard.encryptedFile') }}</span>
+              }
+              @if (links.sharedFileIds().has(file.id)) {
+                <span class="badge">🔗 {{ i18n.t('files.shared') }}</span>
               }
             </span>
           } @else if (item.image) {
@@ -150,7 +162,13 @@
                   : i18n.t('clipboard.copy')
             }}
           </button>
-          @if (native.canShare && !item.image && !item.file) {
+          @if (item.file; as file) {
+            <!-- A link anyone can open, which the file's own key never leaves
+                 our hands for: it rides in the link's fragment. -->
+            <button type="button" class="ghost" (click)="shareLink(file)" [disabled]="linking()">
+              {{ i18n.t('files.share') }}
+            </button>
+          } @else if (native.canShare && !item.image) {
             <button type="button" class="ghost" (click)="share(item)">
               {{ i18n.t('clipboard.share') }}
             </button>

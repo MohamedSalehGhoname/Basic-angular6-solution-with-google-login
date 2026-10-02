@@ -51,6 +51,23 @@ export type SyncEvent =
  */
 export const CLIENT_ID = crypto.randomUUID();
 
+/** A live public link to one file, as the server records it. */
+export interface ShareLink {
+  token: string;
+  fileId: string;
+  createdAt: number;
+  expiresAt: number;
+  maxDownloads: number;
+  downloads: number;
+}
+
+/** What a recipient is told before fetching: how big, how long, how many. */
+export interface SharedFileInfo {
+  sizeBytes: number;
+  expiresAt: number;
+  downloadsLeft: number;
+}
+
 /**
  * Thin transport to the sync server. Everything sent through here is
  * ciphertext or key-derivation metadata — plaintext never leaves the app.
@@ -128,6 +145,50 @@ export class SyncApi {
    */
   async fileContent(fileId: string): Promise<Response> {
     const res = await this.request('GET', `/api/files/${encodeURIComponent(fileId)}/content`);
+    if (!res.ok) {
+      throw new FileRequestError(res.status);
+    }
+    return res;
+  }
+
+  // --- Public links to a file ----------------------------------------------
+
+  /** Asks for a link to one file. The key to open it never comes here. */
+  async createShare(
+    fileId: string,
+    options: { expiresInMs?: number; maxDownloads?: number } = {},
+  ): Promise<ShareLink> {
+    return this.fileJson<ShareLink>(
+      await this.request('POST', `/api/files/${encodeURIComponent(fileId)}/share`, options),
+    );
+  }
+
+  async listShares(): Promise<ShareLink[]> {
+    const res = await this.request('GET', '/api/shares');
+    return (await this.fileJson<{ shares: ShareLink[] }>(res)).shares;
+  }
+
+  async revokeShare(token: string): Promise<void> {
+    const res = await this.request('DELETE', `/api/shares/${encodeURIComponent(token)}`);
+    if (!res.ok) {
+      throw new FileRequestError(res.status);
+    }
+  }
+
+  // The two below are what a recipient's browser calls. They carry no token
+  // and no access key: whoever follows a link has no account here.
+
+  async sharedFileInfo(token: string): Promise<SharedFileInfo> {
+    const res = await fetch(`${this.base}/api/public/shares/${encodeURIComponent(token)}`);
+    if (!res.ok) {
+      throw new FileRequestError(res.status);
+    }
+    return (await res.json()) as SharedFileInfo;
+  }
+
+  /** Returned unread so the caller can decrypt it as it arrives. */
+  async sharedFileContent(token: string): Promise<Response> {
+    const res = await fetch(`${this.base}/api/public/shares/${encodeURIComponent(token)}/content`);
     if (!res.ok) {
       throw new FileRequestError(res.status);
     }

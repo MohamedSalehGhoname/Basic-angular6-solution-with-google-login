@@ -11,6 +11,7 @@ import {
 } from '../../core/auto-lock.service';
 import { AutofillService } from '../../core/autofill.service';
 import { BiometricUnlockService } from '../../core/biometric-unlock.service';
+import { FileLinkService } from '../../core/file-link.service';
 import { SecretsStore } from '../../core/secrets-store';
 import { DesktopCaptureService } from '../../core/desktop-capture.service';
 import { FileShareService } from '../../core/file-share.service';
@@ -35,6 +36,24 @@ export class Settings {
   protected readonly autofill = inject(AutofillService);
   protected readonly autoLock = inject(AutoLockService);
   protected readonly secrets = inject(SecretsStore);
+  protected readonly links = inject(FileLinkService);
+  protected readonly linksError = signal<string | null>(null);
+  protected readonly linkRevoked = signal(false);
+
+  /** Hours a link has left, for a row that says how long it stays open. */
+  protected hoursLeft(expiresAt: number): number {
+    return Math.max(0, Math.round((expiresAt - Date.now()) / (60 * 60 * 1000)));
+  }
+
+  protected async revokeLink(token: string): Promise<void> {
+    this.linksError.set(null);
+    try {
+      await this.links.revoke(token);
+      this.linkRevoked.set(true);
+    } catch {
+      this.linksError.set(this.i18n.t('files.shareFailed'));
+    }
+  }
   protected readonly sealing = signal<{ done: number; total: number } | null>(null);
   protected readonly sealed = signal<number | null>(null);
   protected readonly sealError = signal<string | null>(null);
@@ -92,6 +111,8 @@ export class Settings {
   constructor() {
     void this.biometric.refreshStatus();
     void this.autofill.refreshStatus();
+    // Quiet about it: a failure here only means the list stays empty.
+    void this.links.refresh().catch(() => undefined);
   }
 
   protected async toggleBiometric(on: boolean): Promise<void> {

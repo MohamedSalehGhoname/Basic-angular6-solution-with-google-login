@@ -1,0 +1,46 @@
+<div class="share-page">
+  <h1>{{ i18n.t('share.title') }}</h1>
+
+  @if (loading()) {
+    <p class="muted">{{ i18n.t('share.loading') }}</p>
+  } @else if (error(); as message) {
+    <p class="error" role="alert">{{ message }}</p>
+  }
+
+  @if (info(); as file) {
+    <div class="file-card">
+      <p class="file-name">{{ name() || i18n.t('share.unnamed') }}</p>
+      <p class="muted">
+        {{ formatSize(file.sizeBytes) }} · {{ expiryText(file.expiresAt) }} ·
+        {{ i18n.t('share.downloadsLeft', { n: file.downloadsLeft }) }}
+      </p>
+
+      @if (!blobUrl()) {
+        <button type="button" (click)="fetchFile()" [disabled]="fetching()">
+          {{ fetching() ? i18n.t('share.fetching') : i18n.t('share.get') }}
+        </button>
+        @if (fetching() && progress() > 0) {
+          <progress [value]="progress()" max="100"></progress>
+        }
+      } @else {
+        <a class="cta" [href]="blobUrl()" [download]="name() || 'file'">
+          {{ i18n.t('share.save') }}
+        </a>
+      }
+    </div>
+
+    @if (blobUrl(); as url) {
+      @if (previewable()) {
+        <div class="preview">
+          @if (isPdf()) {
+            <iframe [src]="url" [title]="name()"></iframe>
+          } @else {
+            <img [src]="url" [alt]="name()" />
+          }
+        </div>
+      }
+    }
+  }
+
+  <p class="footnote">{{ i18n.t('share.privacy') }}</p>
+</div>

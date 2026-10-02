@@ -1,9 +1,15 @@
 import { DatePipe } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ClipboardStore, TTL_OPTIONS, type ClipboardEntry } from '../../core/clipboard-store';
+import {
+  ClipboardStore,
+  TTL_OPTIONS,
+  type ClipboardEntry,
+  type ClipboardFile,
+} from '../../core/clipboard-store';
 import { DesktopCaptureService } from '../../core/desktop-capture.service';
 import { FileShareService } from '../../core/file-share.service';
+import { FileLinkService } from '../../core/file-link.service';
 import { I18nService } from '../../core/i18n/i18n.service';
 import type { TranslationKey } from '../../core/i18n/translations';
 import { NativeBridge } from '../../core/native-bridge.service';
@@ -20,6 +26,33 @@ export class Clipboard {
   protected readonly i18n = inject(I18nService);
   protected readonly native = inject(NativeBridge);
   protected readonly files = inject(FileShareService);
+  protected readonly links = inject(FileLinkService);
+  protected readonly linking = signal(false);
+  /** What just happened to a link, shown for a moment under the list. */
+  protected readonly linkNotice = signal<string | null>(null);
+
+  /**
+   * Hands out a link anyone can open. The file's own key goes into the link's
+   * fragment, so the server serves the bytes without being able to read them.
+   */
+  protected async shareLink(file: ClipboardFile): Promise<void> {
+    if (this.linking()) {
+      return;
+    }
+    this.linking.set(true);
+    this.linkNotice.set(null);
+    try {
+      const url = await this.links.create(file);
+      const how = await this.links.send(url);
+      this.linkNotice.set(
+        this.i18n.t(how === 'shared' ? 'files.shareSent' : 'files.shareCopied'),
+      );
+    } catch {
+      this.linkNotice.set(this.i18n.t('files.shareFailed'));
+    } finally {
+      this.linking.set(false);
+    }
+  }
 
   protected formatSize(bytes: number): string {
     const units = ['B', 'KB', 'MB', 'GB'];

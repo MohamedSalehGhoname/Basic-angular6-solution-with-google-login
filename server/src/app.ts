@@ -82,6 +82,28 @@ const COLLECTIONS = ['clipboard', 'secrets', 'groups'] as const;
 // records, so their caps are just abuse limits, far above real use.
 const RECORD_CAPS: Record<string, number> = { secrets: 5000, groups: 1000 };
 
+// A link lasts a day and 50 downloads unless asked otherwise, and may not be
+// talked into lasting much longer.
+const SHARE_DEFAULT_MS = 24 * 60 * 60 * 1000;
+const SHARE_MAX_MS = 30 * 24 * 60 * 60 * 1000;
+const SHARE_DEFAULT_DOWNLOADS = 50;
+const SHARE_MAX_DOWNLOADS = 1000;
+
+const shareBodySchema = {
+  type: 'object',
+  properties: {
+    expiresInMs: { type: 'integer', minimum: 60_000, maximum: SHARE_MAX_MS },
+    maxDownloads: { type: 'integer', minimum: 1, maximum: SHARE_MAX_DOWNLOADS },
+  },
+  additionalProperties: false,
+} as const;
+
+const shareParamsSchema = {
+  type: 'object',
+  required: ['token'],
+  properties: { token: { type: 'string', pattern: '^[a-f0-9]{40}$' } },
+} as const;
+
 const collectionParamsSchema = {
   type: 'object',
   required: ['collection'],
@@ -204,6 +226,21 @@ export function buildApp(options: AppOptions): App {
 
   fastify.get('/healthz', async () => ({ ok: true }));
 
+  // Used by both the owner's routes and the public share routes below.
+  const fileStore = (reply: FastifyReply): FileStore | null => {
+    if (!options.files) {
+      void reply.code(503).send({ error: 'File sharing is not configured' });
+      return null;
+    }
+    return options.files;
+  };
+  const storageFailed = (reply: FastifyReply, err: unknown) => {
+    fastify.log.warn({ err }, 'file storage call failed');
+    const status = err instanceof FileStoreError && err.status === 403 ? 403 : 502;
+    return reply.code(status).send({ error: 'File storage request failed' });
+  };
+
+
   fastify.register(async (api) => {
     api.addHook('preHandler', async (request, reply) => {
       if (!accessKeyMatches(options.accessKey, request.headers['x-access-key'])) {
@@ -290,13 +327,6 @@ export function buildApp(options: AppOptions): App {
 
     // --- Files sent to the clipboard -------------------------------------
     // The server hands out storage URLs for the caller's own files only.
-    const fileStore = (reply: FastifyReply): FileStore | null => {
-      if (!options.files) {
-        void reply.code(503).send({ error: 'File sharing is not configured' });
-        return null;
-      }
-      return options.files;
-    };
     const ownFile = (request: FastifyRequest, reply: FastifyReply): string | null => {
       const { fileId } = request.params as { fileId: string };
       if (db.fileOwner(fileId) !== request.uid) {
@@ -305,12 +335,6 @@ export function buildApp(options: AppOptions): App {
       }
       return fileId;
     };
-    const storageFailed = (reply: FastifyReply, err: unknown) => {
-      fastify.log.warn({ err }, 'file storage call failed');
-      const status = err instanceof FileStoreError && err.status === 403 ? 403 : 502;
-      return reply.code(status).send({ error: 'File storage request failed' });
-    };
-
     api.post('/files', { schema: { body: fileBodySchema } }, async (request, reply) => {
       const store = fileStore(reply);
       if (!store) {
@@ -402,7 +426,99 @@ export function buildApp(options: AppOptions): App {
         return reply.send(Readable.fromWeb(upstream.body as never));
       },
     );
+
+    // --- Public links to a file -------------------------------------------
+    // A link carries the file's key (and its name) in its fragment, which is
+    // never sent to a server, so what is stored here cannot open the file and
+    // does not say what it is.
+    api.post(
+      '/files/:fileId/share',
+      { schema: { params: fileParamsSchema, body: shareBodySchema } },
+      async (request, reply) => {
+        const fileId = ownFile(request, reply);
+        if (!fileId) {
+          return reply;
+        }
+        const body = (request.body ?? {}) as { expiresInMs?: number; maxDownloads?: number };
+        const now = Date.now();
+        const share = {
+          token: randomUUID().replaceAll('-', '') + randomUUID().replaceAll('-', '').slice(0, 8),
+          fileId,
+          uid: request.uid,
+          createdAt: now,
+          expiresAt: now + Math.min(body.expiresInMs ?? SHARE_DEFAULT_MS, SHARE_MAX_MS),
+          maxDownloads: Math.min(body.maxDownloads ?? SHARE_DEFAULT_DOWNLOADS, SHARE_MAX_DOWNLOADS),
+          downloads: 0,
+        };
+        db.createShare(share);
+        return reply.code(201).send(share);
+      },
+    );
+
+    api.get('/shares', async (request) => ({ shares: db.listShares(request.uid) }));
+
+    api.delete('/shares/:token', { schema: { params: shareParamsSchema } }, async (request, reply) => {
+      const { token } = request.params as { token: string };
+      if (!db.deleteShare(request.uid, token)) {
+        return reply.code(404).send({ error: 'No such link' });
+      }
+      return reply.code(204).send();
+    });
   }, { prefix: '/api' });
+
+
+  // --- The recipient's side of a shared link ------------------------------
+  // Deliberately outside the authenticated block: whoever holds the link has
+  // no account here. They still only ever receive ciphertext.
+  fastify.register(async (open) => {
+    open.get('/shares/:token', { schema: { params: shareParamsSchema } }, async (request, reply) => {
+      const { token } = request.params as { token: string };
+      const share = db.getShare(token);
+      if (!share) {
+        return reply.code(404).send({ error: 'This link has expired or does not exist' });
+      }
+      // Size and dates only: the name lives in the link's fragment.
+      return {
+        sizeBytes: db.fileSize(share.fileId),
+        expiresAt: share.expiresAt,
+        downloadsLeft: share.maxDownloads - share.downloads,
+      };
+    });
+
+    open.get(
+      '/shares/:token/content',
+      { schema: { params: shareParamsSchema } },
+      async (request, reply) => {
+        const { token } = request.params as { token: string };
+        const store = fileStore(reply);
+        if (!store) {
+          return reply;
+        }
+        const share = db.getShare(token);
+        // Counted before the bytes go out, and only if a slot was left.
+        if (!share || !db.countDownload(token)) {
+          return reply.code(404).send({ error: 'This link has expired or does not exist' });
+        }
+        let upstream: Response;
+        try {
+          upstream = await fetch((await store.downloadUrl(share.fileId)).downloadUrl);
+        } catch (err) {
+          return storageFailed(reply, err);
+        }
+        if (!upstream.ok || !upstream.body) {
+          return storageFailed(reply, new FileStoreError('download failed', upstream.status));
+        }
+        reply.header('content-type', 'application/octet-stream');
+        // Nothing about this belongs in a search engine or a link preview.
+        reply.header('x-robots-tag', 'noindex, nofollow');
+        const length = upstream.headers.get('content-length');
+        if (length) {
+          reply.header('content-length', length);
+        }
+        return reply.send(Readable.fromWeb(upstream.body as never));
+      },
+    );
+  }, { prefix: '/api/public' });
 
   // Browsers cannot set headers on WebSocket upgrades, so auth rides the
   // query string here instead of the Authorization header.

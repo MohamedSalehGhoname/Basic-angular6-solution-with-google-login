@@ -7,6 +7,7 @@ import { Codes } from './pages/codes/codes';
 import { Login } from './pages/login/login';
 import { Secrets } from './pages/secrets/secrets';
 import { Settings } from './pages/settings/settings';
+import { Share } from './pages/share/share';
 import { Unlock } from './pages/unlock/unlock';
 
 export const routes: Routes = [
@@ -44,6 +45,14 @@ export const routes: Routes = [
     component: Settings,
     canActivate: [authGuard, unlockGuard],
     title: 'Settings · Clipboard Sync',
+  },
+  {
+    // A link somebody was sent. No sign-in, no vault, no guards: the page is
+    // for a recipient who has no account here, and the key to read the file
+    // arrives in the URL fragment, which never reaches the server.
+    path: 's/:token',
+    component: Share,
+    title: 'Shared file · Clipboard Sync',
   },
   { path: '**', redirectTo: '' },
 ];
