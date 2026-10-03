@@ -1,0 +1,12 @@
+{
+  "name": "capacitor-biometric-vault",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Seals the Clipboard Sync vault key with an Android Keystore key that only a strong biometric check can use.",
+  "main": "index.js",
+  "capacitor": {
+    "android": {
+      "src": "android"
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "capacitor-share-receiver",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Receives Android share-sheet content (text, files) for Clipboard Sync and uploads shared files natively.",
+  "main": "index.js",
+  "capacitor": {
+    "android": {
+      "src": "android"
+    }
+  }
+}

@@ -1,0 +1,265 @@
+import { DEFAULT_GROUP_ICON, type GroupsStore } from './groups-store';
+import type { SecretsStore } from './secrets-store';
+
+/**
+ * Import from a KeePass 2 XML export (File ▸ Export ▸ KeePass XML (2.x)).
+ * Parsed entirely on the device: every entry is encrypted by the normal
+ * stores before anything leaves it. Old versions (<History>) and the Recycle
+ * Bin are left out; custom string fields are kept in the notes; file
+ * attachments are not imported (counted instead).
+ */
+
+export interface ImportEntry {
+  title: string;
+  username: string;
+  password: string;
+  url: string;
+  notes: string;
+  /** Only browsers and other managers export these; KeePass XML does not. */
+  totp?: string | null;
+  totpDigits?: number | null;
+  totpPeriod?: number | null;
+  totpAlgorithm?: 'SHA-1' | 'SHA-256' | 'SHA-512' | null;
+}
+
+export interface ImportGroup {
+  name: string;
+  icon: string;
+  entries: ImportEntry[];
+  children: ImportGroup[];
+}
+
+export interface ParsedKeePass {
+  /** The database's root group: its entries go to the top level, its groups become top-level groups. */
+  root: ImportGroup;
+  groupCount: number;
+  entryCount: number;
+  /** Entries with file attachments (the attachments are not imported). */
+  withAttachments: number;
+}
+
+export interface ImportResult {
+  groupsCreated: number;
+  groupsReused: number;
+  entriesAdded: number;
+  duplicatesSkipped: number;
+}
+
+const STANDARD_FIELDS = new Set(['Title', 'UserName', 'Password', 'URL', 'Notes']);
+
+/** KeePass's built-in icon ids → the closest emoji; anything else is a folder. */
+const KEEPASS_ICONS: Record<number, string> = {
+  0: '🔑',
+  1: '🌐',
+  2: '⚠️',
+  3: '🖧',
+  5: '💬',
+  7: '📝',
+  8: '🌐',
+  9: '🪪',
+  11: '📷',
+  13: '🔑',
+  14: '⚡',
+  16: '⭐',
+  17: '💿',
+  18: '🖥️',
+  19: '✉️',
+  20: '⚙️',
+  21: '📋',
+  23: '🖥️',
+  25: '📬',
+  26: '💾',
+  27: '🗄️',
+  29: '🔒',
+  30: '⌨️',
+  31: '🖨️',
+  34: '⚙️',
+  35: '🌐',
+  36: '🗃️',
+  37: '🏦',
+  38: '🪟',
+  39: '🕒',
+  40: '🔍',
+  42: '🧠',
+  43: '🗑️',
+  44: '📝',
+  46: 'ℹ️',
+  47: '📦',
+  48: '📁',
+  49: '📂',
+  50: '📦',
+  51: '🔓',
+  52: '🔒',
+  53: '✅',
+  54: '🖊️',
+  56: '📖',
+  57: '📋',
+  58: '🔑',
+  59: '🧰',
+  60: '🏠',
+  61: '⭐',
+  63: '🪶',
+  65: '📚',
+  66: '💰',
+  67: '📜',
+  68: '📱',
+};
+
+function children(element: Element, tag: string): Element[] {
+  return Array.from(element.children).filter((child) => child.tagName === tag);
+}
+
+function childText(element: Element, tag: string): string {
+  return children(element, tag)[0]?.textContent ?? '';
+}
+
+function parseEntry(element: Element): { entry: ImportEntry; hasAttachment: boolean } {
+  const fields = new Map<string, string>();
+  for (const field of children(element, 'String')) {
+    fields.set(childText(field, 'Key'), childText(field, 'Value'));
+  }
+  const extras = [...fields]
+    .filter(([key, value]) => !STANDARD_FIELDS.has(key) && value.trim())
+    .map(([key, value]) => `${key}: ${value}`);
+  const notes = [fields.get('Notes') ?? '', extras.length ? extras.join('\n') : '']
+    .filter((part) => part.trim())
+    .join('\n\n');
+  const username = fields.get('UserName') ?? '';
+  const url = fields.get('URL') ?? '';
+  const title = (fields.get('Title') ?? '').trim() || url.trim() || username.trim() || 'Untitled';
+  return {
+    entry: { title, username, password: fields.get('Password') ?? '', url, notes },
+    hasAttachment: children(element, 'Binary').length > 0,
+  };
+}
+
+export function parseKeePassXml(xml: string): ParsedKeePass {
+  const doc = new DOMParser().parseFromString(xml, 'application/xml');
+  if (
+    doc.getElementsByTagName('parsererror').length > 0 ||
+    doc.documentElement.tagName !== 'KeePassFile'
+  ) {
+    throw new Error('not-keepass');
+  }
+  const meta = children(doc.documentElement, 'Meta')[0];
+  const recycleBinUuid = meta ? childText(meta, 'RecycleBinUUID').trim() : '';
+  const rootElement = children(doc.documentElement, 'Root')[0];
+  const topGroup = rootElement ? children(rootElement, 'Group')[0] : undefined;
+  if (!topGroup) {
+    throw new Error('not-keepass');
+  }
+
+  let groupCount = 0;
+  let entryCount = 0;
+  let withAttachments = 0;
+  const parseGroup = (element: Element): ImportGroup => {
+    const iconId = Number(childText(element, 'IconID'));
+    const group: ImportGroup = {
+      name: childText(element, 'Name').trim() || 'Group',
+      icon: KEEPASS_ICONS[iconId] ?? DEFAULT_GROUP_ICON,
+      entries: [],
+      children: [],
+    };
+    // Direct <Entry> children only: <History> nests older versions as entries too.
+    for (const entryElement of children(element, 'Entry')) {
+      const { entry, hasAttachment } = parseEntry(entryElement);
+      group.entries.push(entry);
+      entryCount += 1;
+      if (hasAttachment) {
+        withAttachments += 1;
+      }
+    }
+    for (const child of children(element, 'Group')) {
+      if (recycleBinUuid && childText(child, 'UUID').trim() === recycleBinUuid) {
+        continue;
+      }
+      groupCount += 1;
+      group.children.push(parseGroup(child));
+    }
+    return group;
+  };
+
+  const root = parseGroup(topGroup);
+  return { root, groupCount, entryCount, withAttachments };
+}
+
+/**
+ * Creates the parsed groups and entries. Re-importing is safe: a group with
+ * the same name under the same parent is reused, and an entry identical to
+ * one already in that group (title, username, password, URL) is skipped.
+ */
+export async function importKeePass(
+  parsed: ParsedKeePass,
+  groups: GroupsStore,
+  secrets: SecretsStore,
+  onProgress?: (done: number, total: number) => void,
+): Promise<ImportResult> {
+  const result: ImportResult = {
+    groupsCreated: 0,
+    groupsReused: 0,
+    entriesAdded: 0,
+    duplicatesSkipped: 0,
+  };
+  const total = parsed.entryCount + parsed.groupCount;
+  let done = 0;
+  const step = () => {
+    // Incremented separately: `onProgress?.(++done)` would not count at all
+    // when no callback was passed.
+    done += 1;
+    onProgress?.(done, total);
+  };
+
+  // What makes two entries the same account: where it is, what it is called
+  // and who it is for. The password is deliberately not part of it — it is
+  // sealed now, and opening a thousand entries to compare passwords during an
+  // import would undo the point of sealing them. An account already in the
+  // vault is left alone, keeping the password it has.
+  const key = (groupId: string | null, e: { title: string; username: string; url: string }) =>
+    JSON.stringify([groupId ?? '', e.title, e.username, e.url]);
+  const existing = new Set(secrets.items().map((entry) => key(entry.groupId ?? null, entry)));
+
+  const addEntries = async (entries: ImportEntry[], groupId: string | null) => {
+    for (const entry of entries) {
+      const entryKey = key(groupId, entry);
+      if (existing.has(entryKey)) {
+        result.duplicatesSkipped += 1;
+      } else {
+        await secrets.add({ ...entry, attachments: [], groupId });
+        existing.add(entryKey);
+        result.entriesAdded += 1;
+      }
+      step();
+    }
+  };
+
+  const addGroups = async (list: ImportGroup[], parentId: string | null) => {
+    for (const group of list) {
+      const match = groups
+        .items()
+        .find(
+          (g) =>
+            (g.parentId ?? null) === parentId &&
+            g.name.trim().toLowerCase() === group.name.toLowerCase(),
+        );
+      let id: string;
+      if (match) {
+        id = match.id;
+        result.groupsReused += 1;
+      } else {
+        const created = await groups.addGroup(group.name, parentId, group.icon);
+        if (!created) {
+          continue;
+        }
+        id = created.id;
+        result.groupsCreated += 1;
+      }
+      step();
+      await addEntries(group.entries, id);
+      await addGroups(group.children, id);
+    }
+  };
+
+  await addEntries(parsed.root.entries, null);
+  await addGroups(parsed.root.children, null);
+  return result;
+}

@@ -1,0 +1,12 @@
+{
+  "name": "capacitor-autofill",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Offers Clipboard Sync passwords to Android's autofill framework, filling them only after the vault is unlocked in the app.",
+  "main": "index.js",
+  "capacitor": {
+    "android": {
+      "src": "android"
+    }
+  }
+}

@@ -1,0 +1,76 @@
+@if (request(); as req) {
+  <section class="card">
+    @if (req.kind === 'save') {
+      <h2>{{ i18n.t('autofill.saveTitle') }}</h2>
+      <p class="muted">
+        {{ req.password ? i18n.t('autofill.saveIntro') : i18n.t('autofill.saveIntroNoPassword') }}
+      </p>
+
+      <dl class="captured">
+        <dt>{{ i18n.t('autofill.forSite') }}</dt>
+        <dd>{{ req.identity }}</dd>
+        @if (req.username) {
+          <dt>{{ i18n.t('autofill.username') }}</dt>
+          <dd>{{ req.username }}</dd>
+        }
+      </dl>
+
+      <label class="field">
+        <span>{{ i18n.t('autofill.name') }}</span>
+        <input type="text" name="saveTitle" [(ngModel)]="saveTitle" [disabled]="busy()" />
+      </label>
+
+      <div class="actions">
+        <button type="button" (click)="saveNew()" [disabled]="busy()">
+          {{ busy() ? i18n.t('autofill.saving') : i18n.t('autofill.save') }}
+        </button>
+        <button type="button" class="ghost" (click)="dismiss()" [disabled]="busy()">
+          {{ i18n.t('autofill.notNow') }}
+        </button>
+      </div>
+    } @else {
+      <h2>{{ i18n.t('autofill.fillTitle') }}</h2>
+      <p class="muted">
+        {{ i18n.t('autofill.fillIntro') }} <strong>{{ req.identity }}</strong>
+      </p>
+
+      <input
+        type="search"
+        class="search"
+        name="search"
+        [(ngModel)]="search"
+        [placeholder]="i18n.t('autofill.search')"
+      />
+
+      @if (matches().length === 0) {
+        <p class="empty">{{ i18n.t('autofill.none') }}</p>
+      }
+
+      <ul class="entries">
+        @for (row of matches(); track row.secret.id) {
+          <li>
+            <button type="button" class="entry" (click)="fill(row.secret)" [disabled]="busy()">
+              <span class="entry-title">
+                {{ row.secret.title }}
+                @if (row.score > 0) {
+                  <span class="badge">{{ i18n.t('autofill.suggested') }}</span>
+                }
+              </span>
+              <span class="entry-user">{{ row.secret.username }}</span>
+            </button>
+          </li>
+        }
+      </ul>
+
+      <div class="actions">
+        <button type="button" class="ghost" (click)="dismiss()" [disabled]="busy()">
+          {{ i18n.t('autofill.cancel') }}
+        </button>
+      </div>
+    }
+
+    @if (error(); as message) {
+      <p class="error" role="alert">{{ message }}</p>
+    }
+  </section>
+}

@@ -1,0 +1,357 @@
+import Database from 'better-sqlite3';
+
+export interface VaultRecord {
+  salt: string;
+  opsLimit: number;
+  memLimit: number;
+  wrappedKey: string;
+  /**
+   * Ciphertext only the current vault key opens, so a device can tell its
+   * key went stale (the vault was replaced elsewhere) and lock itself.
+   */
+  keyCheck?: string;
+  /** Optional recovery-code-wrapped copy of the vault key, stored opaquely. */
+  recovery?: unknown;
+  updatedAt: number;
+}
+
+export interface ItemRecord {
+  id: string;
+  blob: string;
+  createdAt: number;
+}
+
+/**
+ * A link that lets somebody without an account fetch one file's ciphertext.
+ * The key to read it never reaches here: it travels in the link's fragment,
+ * which browsers do not send to servers. Nor does the file's name — so a
+ * share row says who may be billed for the bytes and when to stop serving
+ * them, and nothing about what the file is.
+ */
+export interface ShareRecord {
+  token: string;
+  fileId: string;
+  uid: string;
+  createdAt: number;
+  expiresAt: number;
+  maxDownloads: number;
+  downloads: number;
+}
+
+/**
+ * All values stored here are either identifiers or ciphertext produced by
+ * the client; the server never holds plaintext or key material.
+ */
+export class SyncDb {
+  private readonly db: Database.Database;
+
+  constructor(path: string) {
+    this.db = new Database(path);
+    this.db.pragma('journal_mode = WAL');
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS vaults (
+        uid         TEXT PRIMARY KEY,
+        salt        TEXT NOT NULL,
+        ops_limit   INTEGER NOT NULL,
+        mem_limit   INTEGER NOT NULL,
+        wrapped_key TEXT NOT NULL,
+        key_check   TEXT,
+        recovery    TEXT,
+        updated_at  INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS items (
+        uid        TEXT NOT NULL,
+        collection TEXT NOT NULL,
+        id         TEXT NOT NULL,
+        blob       TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (uid, collection, id)
+      );
+      CREATE INDEX IF NOT EXISTS items_by_collection_time
+        ON items (uid, collection, created_at DESC);
+      CREATE TABLE IF NOT EXISTS files (
+        file_id    TEXT PRIMARY KEY,
+        uid        TEXT NOT NULL,
+        size_bytes INTEGER NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS shares (
+        token         TEXT PRIMARY KEY,
+        file_id       TEXT NOT NULL,
+        uid           TEXT NOT NULL,
+        created_at    INTEGER NOT NULL,
+        expires_at    INTEGER NOT NULL,
+        max_downloads INTEGER NOT NULL,
+        downloads     INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE INDEX IF NOT EXISTS shares_by_owner ON shares (uid, created_at DESC);
+      CREATE INDEX IF NOT EXISTS shares_by_file ON shares (file_id);
+    `);
+    // Databases created before the key check gain the column here.
+    this.addColumnIfMissing('vaults', 'key_check');
+  }
+
+  /** Adds an optional TEXT column to an existing table, once. */
+  private addColumnIfMissing(table: string, column: string): void {
+    const columns = this.db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+    if (!columns.some((c) => c.name === column)) {
+      this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} TEXT`);
+    }
+  }
+
+  /** Records which user a stored file belongs to; storage ids are global. */
+  addFile(uid: string, fileId: string, sizeBytes: number): void {
+    this.db
+      .prepare('INSERT INTO files (file_id, uid, size_bytes, created_at) VALUES (?, ?, ?, ?)')
+      .run(fileId, uid, sizeBytes, Date.now());
+  }
+
+  // --- Public share links ---------------------------------------------------
+
+  createShare(share: ShareRecord): void {
+    this.db
+      .prepare(
+        `INSERT INTO shares (token, file_id, uid, created_at, expires_at, max_downloads, downloads)
+         VALUES (?, ?, ?, ?, ?, ?, 0)`,
+      )
+      .run(
+        share.token,
+        share.fileId,
+        share.uid,
+        share.createdAt,
+        share.expiresAt,
+        share.maxDownloads,
+      );
+  }
+
+  /** A live share, or null when it never existed, expired or ran out. */
+  getShare(token: string, now: number = Date.now()): ShareRecord | null {
+    const row = this.db
+      .prepare(
+        `SELECT token, file_id, uid, created_at, expires_at, max_downloads, downloads
+           FROM shares WHERE token = ?`,
+      )
+      .get(token) as
+      | {
+          token: string;
+          file_id: string;
+          uid: string;
+          created_at: number;
+          expires_at: number;
+          max_downloads: number;
+          downloads: number;
+        }
+      | undefined;
+    if (!row || row.expires_at <= now || row.downloads >= row.max_downloads) {
+      return null;
+    }
+    return {
+      token: row.token,
+      fileId: row.file_id,
+      uid: row.uid,
+      createdAt: row.created_at,
+      expiresAt: row.expires_at,
+      maxDownloads: row.max_downloads,
+      downloads: row.downloads,
+    };
+  }
+
+  /**
+   * Counts one download, refusing when the share has run out. Done as one
+   * statement so two downloads at once cannot both pass the last slot.
+   */
+  countDownload(token: string, now: number = Date.now()): boolean {
+    const result = this.db
+      .prepare(
+        `UPDATE shares SET downloads = downloads + 1
+          WHERE token = ? AND expires_at > ? AND downloads < max_downloads`,
+      )
+      .run(token, now);
+    return result.changes > 0;
+  }
+
+  listShares(uid: string, now: number = Date.now()): ShareRecord[] {
+    return (
+      this.db
+        .prepare(
+          `SELECT token, file_id, uid, created_at, expires_at, max_downloads, downloads
+             FROM shares WHERE uid = ? AND expires_at > ? ORDER BY created_at DESC`,
+        )
+        .all(uid, now) as {
+        token: string;
+        file_id: string;
+        uid: string;
+        created_at: number;
+        expires_at: number;
+        max_downloads: number;
+        downloads: number;
+      }[]
+    ).map((row) => ({
+      token: row.token,
+      fileId: row.file_id,
+      uid: row.uid,
+      createdAt: row.created_at,
+      expiresAt: row.expires_at,
+      maxDownloads: row.max_downloads,
+      downloads: row.downloads,
+    }));
+  }
+
+  /** Revokes one link; only its owner may. */
+  deleteShare(uid: string, token: string): boolean {
+    return (
+      this.db.prepare('DELETE FROM shares WHERE uid = ? AND token = ?').run(uid, token).changes > 0
+    );
+  }
+
+  /** Revokes every link to a file, for when the file itself goes away. */
+  deleteSharesForFile(fileId: string): number {
+    return this.db.prepare('DELETE FROM shares WHERE file_id = ?').run(fileId).changes;
+  }
+
+  /** The stored size, for telling a recipient what they are about to fetch. */
+  fileSize(fileId: string): number {
+    const row = this.db.prepare('SELECT size_bytes FROM files WHERE file_id = ?').get(fileId) as
+      | { size_bytes: number }
+      | undefined;
+    return row?.size_bytes ?? 0;
+  }
+
+  fileOwner(fileId: string): string | null {
+    const row = this.db.prepare('SELECT uid FROM files WHERE file_id = ?').get(fileId) as
+      | { uid: string }
+      | undefined;
+    return row?.uid ?? null;
+  }
+
+  getVault(uid: string): VaultRecord | null {
+    const row = this.db
+      .prepare(
+        'SELECT salt, ops_limit, mem_limit, wrapped_key, key_check, recovery, updated_at FROM vaults WHERE uid = ?',
+      )
+      .get(uid) as
+      | {
+          salt: string;
+          ops_limit: number;
+          mem_limit: number;
+          wrapped_key: string;
+          key_check: string | null;
+          recovery: string | null;
+          updated_at: number;
+        }
+      | undefined;
+    if (!row) {
+      return null;
+    }
+    return {
+      salt: row.salt,
+      opsLimit: row.ops_limit,
+      memLimit: row.mem_limit,
+      wrappedKey: row.wrapped_key,
+      keyCheck: row.key_check ?? undefined,
+      recovery: row.recovery ? JSON.parse(row.recovery) : undefined,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  putVault(uid: string, vault: Omit<VaultRecord, 'updatedAt'>): VaultRecord {
+    const updatedAt = Date.now();
+    const recovery = vault.recovery === undefined ? null : JSON.stringify(vault.recovery);
+    this.db
+      .prepare(
+        `INSERT INTO vaults (uid, salt, ops_limit, mem_limit, wrapped_key, key_check, recovery, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (uid) DO UPDATE SET
+           salt = excluded.salt,
+           ops_limit = excluded.ops_limit,
+           mem_limit = excluded.mem_limit,
+           wrapped_key = excluded.wrapped_key,
+           key_check = excluded.key_check,
+           recovery = excluded.recovery,
+           updated_at = excluded.updated_at`,
+      )
+      .run(
+        uid,
+        vault.salt,
+        vault.opsLimit,
+        vault.memLimit,
+        vault.wrappedKey,
+        vault.keyCheck ?? null,
+        recovery,
+        updatedAt,
+      );
+    return { ...vault, updatedAt };
+  }
+
+  listItems(uid: string, collection: string): ItemRecord[] {
+    const rows = this.db
+      .prepare(
+        `SELECT id, blob, created_at FROM items
+         WHERE uid = ? AND collection = ? ORDER BY created_at DESC, id`,
+      )
+      .all(uid, collection) as { id: string; blob: string; created_at: number }[];
+    return rows.map((row) => ({ id: row.id, blob: row.blob, createdAt: row.created_at }));
+  }
+
+  putItem(
+    uid: string,
+    collection: string,
+    id: string,
+    blob: string,
+    maxItems: number,
+  ): ItemRecord {
+    const existing = this.db
+      .prepare('SELECT created_at FROM items WHERE uid = ? AND collection = ? AND id = ?')
+      .get(uid, collection, id) as { created_at: number } | undefined;
+    // Preserve the original timestamp on update so an edit does not reorder
+    // the entry (secrets keep their place; clipboard items are immutable).
+    const createdAt = existing?.created_at ?? Date.now();
+    const insert = this.db.prepare(
+      `INSERT INTO items (uid, collection, id, blob, created_at) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT (uid, collection, id) DO UPDATE SET blob = excluded.blob`,
+    );
+    const trim = this.db.prepare(
+      `DELETE FROM items WHERE uid = ? AND collection = ? AND id NOT IN (
+         SELECT id FROM items WHERE uid = ? AND collection = ?
+         ORDER BY created_at DESC, id LIMIT ?
+       )`,
+    );
+    this.db.transaction(() => {
+      insert.run(uid, collection, id, blob, createdAt);
+      trim.run(uid, collection, uid, collection, maxItems);
+    })();
+    return { id, blob, createdAt };
+  }
+
+  deleteItem(uid: string, collection: string, id: string): boolean {
+    return (
+      this.db
+        .prepare('DELETE FROM items WHERE uid = ? AND collection = ? AND id = ?')
+        .run(uid, collection, id).changes > 0
+    );
+  }
+
+  clearItems(uid: string, collection: string): void {
+    this.db.prepare('DELETE FROM items WHERE uid = ? AND collection = ?').run(uid, collection);
+  }
+
+  /**
+   * Erases everything the server holds for one account: the vault (and with it
+   * the only copy of the wrapped key), every item in every collection, and the
+   * record of the files it sent. The file bytes themselves live in append-only
+   * storage and go when their retention period ends — the account's records of
+   * them are gone either way, so nothing here can reach them again.
+   */
+  deleteAccount(uid: string): { items: number; files: number; hadVault: boolean } {
+    return this.db.transaction(() => {
+      const items = this.db.prepare('DELETE FROM items WHERE uid = ?').run(uid).changes;
+      const files = this.db.prepare('DELETE FROM files WHERE uid = ?').run(uid).changes;
+      const hadVault = this.db.prepare('DELETE FROM vaults WHERE uid = ?').run(uid).changes > 0;
+      return { items, files, hadVault };
+    })();
+  }
+
+  close(): void {
+    this.db.close();
+  }
+}

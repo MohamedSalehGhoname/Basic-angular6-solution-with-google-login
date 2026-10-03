@@ -1,0 +1,8 @@
+{
+  "name": "capacitor-qr-scanner",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Scans a QR code through Google Play services, so the app never needs the camera permission or sees the camera feed.",
+  "main": "index.js",
+  "capacitor": { "android": { "src": "android" } }
+}

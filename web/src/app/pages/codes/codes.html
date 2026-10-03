@@ -1,0 +1,146 @@
+<div class="page-head">
+  <h1>{{ i18n.t('codes.title') }}</h1>
+  <div class="head-actions">
+    @if (qr.supported()) {
+      <button type="button" class="ghost" (click)="scanExport()" [disabled]="scanning()">
+        {{ scanning() ? i18n.t('secrets.totpScanning') : i18n.t('codes.import.button') }}
+      </button>
+    }
+    <a class="link" routerLink="/secrets">{{ i18n.t('codes.manage') }}</a>
+  </div>
+</div>
+
+@if (scanned().length > 0) {
+  <div class="import-card" role="dialog" [attr.aria-label]="i18n.t('codes.import.title')">
+    <h2>{{ i18n.t('codes.import.title') }}</h2>
+    <p>{{ i18n.t('codes.import.found', { n: scanned().length }) }}</p>
+    @if (batchesLeft() > 0) {
+      <!-- Authenticator splits a long list over several codes; the export
+           itself says how many, so the user is told what is still missing. -->
+      <p class="warn">{{ i18n.t('codes.import.more', { n: batchesLeft() }) }}</p>
+    }
+    @if (hotpSkipped() > 0) {
+      <p class="muted">{{ i18n.t('codes.import.hotp', { n: hotpSkipped() }) }}</p>
+    }
+    <ul class="scanned">
+      @for (account of scanned(); track account.secret) {
+        <li>
+          <span class="scanned-title">{{ title(account) }}</span>
+          @if (alreadyHave(account)) {
+            <span class="muted">{{ i18n.t('codes.import.already') }}</span>
+          }
+        </li>
+      }
+    </ul>
+    <p class="muted">{{ i18n.t('codes.import.safe') }}</p>
+    <div class="form-actions">
+      <button type="button" class="ghost" (click)="cancelImport()" [disabled]="importing()">
+        {{ i18n.t('secrets.cancel') }}
+      </button>
+      @if (batchesLeft() > 0) {
+        <button type="button" class="ghost" (click)="scanExport()" [disabled]="scanning()">
+          {{ i18n.t('codes.import.scanNext') }}
+        </button>
+      }
+      <button type="button" (click)="runImport()" [disabled]="importing()">
+        {{ importing() ? i18n.t('secrets.import.run') : i18n.t('codes.import.run') }}
+      </button>
+    </div>
+  </div>
+}
+
+@if (importResult(); as result) {
+  <p class="done" role="status">
+    {{ i18n.t('codes.import.done', { n: result.added, d: result.existing }) }}
+    <button type="button" class="link" (click)="importResult.set(null)">
+      {{ i18n.t('files.dismiss') }}
+    </button>
+  </p>
+}
+
+@if (clipboard.secondsLeft() > 0) {
+  <p class="clearing" role="status">
+    {{
+      i18n.t('secrets.copiedLabel', {
+        label: clipboard.activeLabel() ?? '',
+        n: clipboard.secondsLeft(),
+      })
+    }}
+    <button type="button" class="link" (click)="clipboard.clearNow()">
+      {{ i18n.t('secrets.clearNow') }}
+    </button>
+  </p>
+}
+
+@if (error(); as message) {
+  <p class="error" role="alert">{{ message }}</p>
+}
+
+@if (loading()) {
+  <p class="muted">{{ i18n.t('codes.loading') }}</p>
+} @else if (withCodes().length === 0) {
+  <div class="empty-state">
+    <p>{{ i18n.t('codes.empty') }}</p>
+    <p class="hint">{{ i18n.t('codes.emptyHint') }}</p>
+    <a class="cta" routerLink="/secrets">{{ i18n.t('codes.emptyAction') }}</a>
+  </div>
+} @else {
+  @if (withCodes().length > 5) {
+    <input
+      class="search"
+      type="search"
+      [ngModel]="search()"
+      (ngModelChange)="search.set($event)"
+      [placeholder]="i18n.t('codes.search')"
+      [attr.aria-label]="i18n.t('codes.search')"
+    />
+  }
+
+  <p class="hint tap-hint">{{ i18n.t('codes.tapHint') }}</p>
+
+  @if (filtered().length === 0) {
+    <p class="muted">{{ i18n.t('codes.noMatch', { q: search() }) }}</p>
+  }
+
+  <ul class="codes">
+    @for (entry of filtered(); track entry.id) {
+      <li>
+        <button
+          type="button"
+          class="code-row"
+          [class.copied]="copiedId() === entry.id"
+          (click)="copy(entry)"
+          [attr.aria-label]="i18n.t('codes.copyOne', { title: entry.title })"
+        >
+          <span class="identity">
+            <span class="title">{{ entry.title }}</span>
+            @if (entry.username) {
+              <span class="username">{{ entry.username }}</span>
+            }
+            @if (groupPath(entry)) {
+              <span class="group-path">{{ groupPath(entry) }}</span>
+            }
+          </span>
+
+          <span class="code" [class.soon]="secondsLeft(entry) <= 5">{{ codeOf(entry) }}</span>
+
+          <span class="state">
+            @if (copiedId() === entry.id) {
+              <span class="copied-tag">{{ i18n.t('codes.copied') }}</span>
+            } @else {
+              <!-- The ring empties as the code ages: the same signal an
+                   authenticator app gives, without reading a number. -->
+              <span
+                class="ring"
+                [style.background]="ringBackground(entry)"
+                [attr.title]="i18n.t('codes.secondsLeft', { n: secondsLeft(entry) })"
+              >
+                <span class="ring-count">{{ secondsLeft(entry) }}</span>
+              </span>
+            }
+          </span>
+        </button>
+      </li>
+    }
+  </ul>
+}

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Points Android's settings screen at the page where the user can turn
+     autofill for this app on, and describes the service in that list. -->
+<autofill-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:settingsActivity="com.ghomicrosystems.ghoclipboard.MainActivity"
+    android:supportsInlineSuggestions="true" />

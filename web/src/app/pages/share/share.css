@@ -1,0 +1,89 @@
+.share-page {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+}
+
+h1 {
+  font-size: 1.3rem;
+  margin: 0 0 1rem;
+}
+
+.muted {
+  color: var(--text-subtle);
+  font-size: 0.85rem;
+}
+
+.error {
+  padding: 0.6rem 0.8rem;
+  border-radius: var(--radius-sm);
+  background: var(--danger-surface, rgba(220, 38, 38, 0.08));
+  color: var(--danger);
+}
+
+.file-card {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.file-name {
+  margin: 0 0 0.25rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+button,
+.cta {
+  display: inline-block;
+  margin-top: 0.9rem;
+  padding: 0.5rem 1rem;
+  font: inherit;
+  font-size: 0.9rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--primary);
+  color: var(--on-primary);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+progress {
+  display: block;
+  width: 100%;
+  margin-top: 0.6rem;
+}
+
+/* The file itself, for the kinds worth looking at before saving. */
+.preview {
+  margin-top: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface-2);
+}
+
+.preview img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.preview iframe {
+  display: block;
+  width: 100%;
+  height: 75vh;
+  border: 0;
+}
+
+.footnote {
+  margin-top: 1.5rem;
+  font-size: 0.8rem;
+  color: var(--text-subtle);
+}
